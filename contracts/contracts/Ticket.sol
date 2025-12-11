@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 /**
  * @title Ticket
@@ -11,9 +11,7 @@ import "@openzeppelin/contracts/utils/Counters.sol";
  * Features: Controlled transfers, resale tracking, burn-on-entry
  */
 contract Ticket is ERC721, Ownable {
-    using Counters for Counters.Counter;
-    
-    Counters.Counter private _tokenIds;
+    uint256 private _tokenIds;
     
     // Anti-scalping configuration
     uint256 public maxResales = 2;
@@ -43,7 +41,7 @@ contract Ticket is ERC721, Ownable {
         string memory symbol,
         uint256 _basePrice,
         address _factory
-    ) ERC721(name, symbol) {
+    ) ERC721(name, symbol) Ownable(msg.sender) {
         basePrice = _basePrice;
         factory = _factory;
     }
@@ -52,8 +50,8 @@ contract Ticket is ERC721, Ownable {
      * @dev Mint new ticket (only factory)
      */
     function mint(address to) external onlyFactory returns (uint256) {
-        _tokenIds.increment();
-        uint256 tokenId = _tokenIds.current();
+        _tokenIds++;
+        uint256 tokenId = _tokenIds;
         
         _safeMint(to, tokenId);
         lastSalePrice[tokenId] = basePrice;
@@ -71,7 +69,7 @@ contract Ticket is ERC721, Ownable {
         uint256 tokenId,
         uint256 salePrice
     ) external onlyFactory {
-        require(_exists(tokenId), "Token does not exist");
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
         require(ownerOf(tokenId) == from, "Not token owner");
         require(resaleCount[tokenId] < maxResales, "Max resales exceeded");
         
@@ -93,27 +91,12 @@ contract Ticket is ERC721, Ownable {
      * @dev Burn ticket on entry (only factory)
      */
     function burnByFactory(uint256 tokenId) external onlyFactory {
-        require(_exists(tokenId), "Token does not exist");
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
         address owner = ownerOf(tokenId);
         
         _burn(tokenId);
         
         emit TicketBurned(tokenId, owner);
-    }
-    
-    /**
-     * @dev Override transfer to prevent unauthorized transfers
-     */
-    function transferFrom(address from, address to, uint256 tokenId) public override {
-        revert("Use controlled transfer only");
-    }
-    
-    function safeTransferFrom(address from, address to, uint256 tokenId) public override {
-        revert("Use controlled transfer only");
-    }
-    
-    function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data) public override {
-        revert("Use controlled transfer only");
     }
     
     /**
@@ -138,7 +121,7 @@ contract Ticket is ERC721, Ownable {
         uint256 lastPrice,
         bool exists
     ) {
-        if (!_exists(tokenId)) {
+        if (_ownerOf(tokenId) == address(0)) {
             return (address(0), 0, 0, false);
         }
         
@@ -154,19 +137,19 @@ contract Ticket is ERC721, Ownable {
      * @dev Total supply
      */
     function totalSupply() external view returns (uint256) {
-        return _tokenIds.current();
+        return _tokenIds;
     }
     
     /**
      * @dev Token URI for metadata
      */
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
-        require(_exists(tokenId), "Token does not exist");
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
         
         // Return API endpoint for dynamic metadata
         return string(abi.encodePacked(
             "https://api.bookbyblock.com/metadata/",
-            Strings.toString(address(this)),
+            Strings.toString(uint256(uint160(address(this)))),
             "/",
             Strings.toString(tokenId)
         ));

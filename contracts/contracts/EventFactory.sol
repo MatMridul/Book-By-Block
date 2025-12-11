@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "./Ticket.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title EventFactory
@@ -12,9 +11,7 @@ import "@openzeppelin/contracts/utils/Counters.sol";
  * Handles event creation, ticket minting, and controlled resales
  */
 contract EventFactory is Ownable, ReentrancyGuard {
-    using Counters for Counters.Counter;
-    
-    Counters.Counter private _eventIds;
+    uint256 private _eventIds;
     
     struct Event {
         uint256 eventId;
@@ -69,7 +66,7 @@ contract EventFactory is Ownable, ReentrancyGuard {
         address owner
     );
     
-    constructor(address _feeRecipient) {
+    constructor(address _feeRecipient) Ownable(msg.sender) {
         feeRecipient = _feeRecipient;
     }
     
@@ -86,8 +83,8 @@ contract EventFactory is Ownable, ReentrancyGuard {
         require(basePrice > 0, "Base price must be > 0");
         require(totalSupply > 0, "Total supply must be > 0");
         
-        _eventIds.increment();
-        eventId = _eventIds.current();
+        _eventIds++;
+        eventId = _eventIds;
         
         // Deploy new Ticket contract
         Ticket ticket = new Ticket(name, symbol, basePrice, address(this));
@@ -238,7 +235,7 @@ contract EventFactory is Ownable, ReentrancyGuard {
     }
     
     function getTotalEvents() external view returns (uint256) {
-        return _eventIds.current();
+        return _eventIds;
     }
     
     function getEventStats(uint256 eventId) external view returns (
