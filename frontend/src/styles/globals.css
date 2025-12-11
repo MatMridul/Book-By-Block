@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background-color: #0D0D0D;
+  color: #E6E6E6;
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1A1A1A;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #7C3AED;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #8B5CF6;
+}
+
+/* Loading animations */
+@keyframes shimmer {
+  0% {
+    background-position: -468px 0;
+  }
+  100% {
+    background-position: 468px 0;
+  }
+}
+
+.shimmer {
+  animation: shimmer 1.5s ease-in-out infinite;
+  background: linear-gradient(
+    to right,
+    #1A1A1A 8%,
+    #2A2A2A 18%,
+    #1A1A1A 33%
+  );
+  background-size: 800px 104px;
+}
+
+/* QR Code animations */
+.qr-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.qr-refresh-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #7C3AED, #24E3C0);
+  animation: qr-countdown 10s linear infinite;
+}
+
+@keyframes qr-countdown {
+  0% { width: 100%; }
+  100% { width: 0%; }
+}
+
+/* Button styles */
+.btn-primary {
+  @apply bg-primary-purple hover:bg-primary-purple-dark text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95;
+}
+
+.btn-secondary {
+  @apply bg-dark-card hover:bg-dark-border text-dark-text border border-dark-border font-medium py-3 px-6 rounded-lg transition-all duration-200;
+}
+
+.btn-success {
+  @apply bg-accent-success hover:bg-green-600 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200;
+}
+
+.btn-error {
+  @apply bg-accent-error hover:bg-red-600 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200;
+}
+
+/* Card styles */
+.card {
+  @apply bg-dark-card border border-dark-border rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300;
+}
+
+.card-hover {
+  @apply hover:border-primary-purple hover:shadow-primary-purple/20 cursor-pointer transform hover:scale-105;
+}
+
+/* Input styles */
+.input {
+  @apply bg-dark-card border border-dark-border text-dark-text placeholder-dark-muted rounded-lg px-4 py-3 focus:outline-none focus:border-primary-purple focus:ring-2 focus:ring-primary-purple/20 transition-all duration-200;
+}
+
+/* Status indicators */
+.status-success {
+  @apply bg-accent-success/20 text-accent-success border border-accent-success/30;
+}
+
+.status-warning {
+  @apply bg-accent-warning/20 text-accent-warning border border-accent-warning/30;
+}
+
+.status-error {
+  @apply bg-accent-error/20 text-accent-error border border-accent-error/30;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
