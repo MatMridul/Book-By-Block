@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Navbar } from '@/components/Navbar'
@@ -11,13 +11,17 @@ export const metadata: Metadata = {
   description: 'Blockchain-powered NFT tickets with anti-scalping protection and dynamic QR verification',
   keywords: 'blockchain, NFT, tickets, web3, anti-scalping, polygon',
   authors: [{ name: 'BookByBlock Team' }],
-  viewport: 'width=device-width, initial-scale=1',
-  themeColor: '#7C3AED',
   manifest: '/manifest.json',
   icons: {
     icon: '/favicon.ico',
     apple: '/apple-touch-icon.png'
   }
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#7C3AED'
 }
 
 export default function RootLayout({

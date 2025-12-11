@@ -7,11 +7,6 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
   },
   
-  // PWA optimizations for mobile scanning
-  experimental: {
-    appDir: true
-  },
-  
   // Webpack config for camera access
   webpack: (config) => {
     config.resolve.fallback = {
@@ -21,7 +16,10 @@ const nextConfig = {
       tls: false
     };
     return config;
-  }
+  },
+
+  // Output configuration
+  output: 'standalone'
 };
 
 module.exports = nextConfig;

@@ -3,11 +3,6 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   
-  // PWA configuration
-  experimental: {
-    appDir: true
-  },
-  
   // Environment variables
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
@@ -29,7 +24,10 @@ const nextConfig = {
       tls: false
     };
     return config;
-  }
+  },
+
+  // Output configuration for deployment
+  output: 'standalone'
 };
 
 module.exports = nextConfig;
