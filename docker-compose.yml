@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  # 🔗 Local Blockchain Network
+  hardhat:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.hardhat
+    ports:
+      - "8545:8545"
+    volumes:
+      - ./contracts:/app/contracts
+    command: npx hardhat node --hostname 0.0.0.0
+    networks:
+      - bookbyblock
+
+  # 🔧 Backend API Services
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - BLOCKCHAIN_RPC_URL=http://hardhat:8545
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/bookbyblock
+    depends_on:
+      - postgres
+      - hardhat
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - bookbyblock
+
+  # 🎨 Frontend PWA
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - NEXT_PUBLIC_BLOCKCHAIN_RPC=http://localhost:8545
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - bookbyblock
+
+  # 📱 Scanner PWA
+  scanner:
+    build:
+      context: ./scanner
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:3001
+    depends_on:
+      - backend
+    volumes:
+      - ./scanner:/app
+      - /app/node_modules
+    networks:
+      - bookbyblock
+
+  # 🗄️ PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=bookbyblock
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - bookbyblock
+
+  # 📊 Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - bookbyblock
+
+  # 📈 Monitoring Stack
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3003:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana:/etc/grafana/provisioning
+    networks:
+      - bookbyblock
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - bookbyblock
+
+volumes:
+  postgres_data:
+  redis_data:
+  grafana_data:
+  prometheus_data:
+
+networks:
+  bookbyblock:
+    driver: bridge
