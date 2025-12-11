@@ -1,0 +1,20 @@
+{
+  "name": "@bookbyblock/contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for BookByBlock NFT ticketing platform",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:mumbai": "hardhat run scripts/deploy.js --network mumbai",
+    "verify": "hardhat verify --network mumbai",
+    "node": "hardhat node",
+    "clean": "hardhat clean"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@openzeppelin/contracts": "^5.0.1",
+    "hardhat": "^2.19.4",
+    "solhint": "^4.1.1"
+  }
+}
