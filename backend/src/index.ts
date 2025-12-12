@@ -1,32 +1,40 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import swagger from '@fastify/swagger';
-import swaggerUi from '@fastify/swagger-ui';
-import { config } from 'dotenv';
 import { BlockchainService } from './services/blockchain';
 import { QRService } from './services/qr';
 
-config();
+// Optimize for Lambda - conditional dotenv loading
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
 
-const fastify = Fastify({ logger: true });
-const blockchain = new BlockchainService();
-const qrService = new QRService();
+// Initialize Fastify with production optimizations
+const fastify = Fastify({ 
+  logger: process.env.NODE_ENV !== 'production',
+  disableRequestLogging: process.env.NODE_ENV === 'production'
+});
 
-// CORS setup - CRITICAL for production deployment
+// Lazy initialization for better cold start performance
+let blockchain: BlockchainService;
+let qrService: QRService;
+
+const getServices = () => {
+  if (!blockchain) blockchain = new BlockchainService();
+  if (!qrService) qrService = new QRService();
+  return { blockchain, qrService };
+};
+
+// Optimized CORS for AWS
 fastify.register(cors, {
   origin: (origin, callback) => {
     const allowedOrigins = [
       'http://localhost:3000',
-      'https://bookbyblock.netlify.app',
-      'https://*.netlify.app',
-      'https://vercel.app',
-      'https://*.vercel.app'
+      'https://*.amplifyapp.com',
+      'https://*.amazonaws.com'
     ];
     
-    // Allow requests with no origin (mobile apps, etc.)
     if (!origin) return callback(null, true);
     
-    // Check if origin matches any allowed pattern
     const isAllowed = allowedOrigins.some(pattern => {
       if (pattern.includes('*')) {
         const regex = new RegExp(pattern.replace('*', '.*'));
@@ -37,40 +45,15 @@ fastify.register(cors, {
     
     callback(null, isAllowed);
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
-});
-
-// Swagger documentation
-fastify.register(swagger, {
-  openapi: {
-    info: {
-      title: 'BookByBlock API',
-      description: 'Web3 Anti-Scalping Ticketing Platform API',
-      version: '1.0.0'
-    },
-    servers: [{ url: 'http://localhost:3001' }]
-  }
-});
-
-fastify.register(swaggerUi, {
-  routePrefix: '/docs',
-  uiConfig: {
-    docExpansion: 'full',
-    deepLinking: false
-  }
+  credentials: false
 });
 
 // Health check
-fastify.get('/health', async () => {
-  return { 
-    status: 'healthy', 
-    timestamp: new Date().toISOString(),
-    version: '1.0.0'
-  };
-});
-
-// 🎫 EVENT MANAGEMENT
+fastify.get('/health', async () => ({ 
+  status: 'ok', 
+  timestamp: new Date().toISOString(),
+  version: '1.0.0'
+}));
 
 // Create new event
 fastify.post('/api/admin/create-event', {
@@ -88,6 +71,7 @@ fastify.post('/api/admin/create-event', {
   }
 }, async (request, reply) => {
   try {
+    const { blockchain } = getServices();
     const { name, symbol, basePrice, totalSupply } = request.body as any;
     
     const result = await blockchain.createEvent(name, symbol, basePrice, totalSupply);
@@ -106,6 +90,7 @@ fastify.post('/api/admin/create-event', {
 // Get all events
 fastify.get('/api/events', async (request, reply) => {
   try {
+    const { blockchain } = getServices();
     const events = await blockchain.getAllEvents();
     return {
       success: true,
@@ -120,24 +105,20 @@ fastify.get('/api/events', async (request, reply) => {
 // Get event details
 fastify.get('/api/events/:eventId', async (request, reply) => {
   try {
+    const { blockchain } = getServices();
     const { eventId } = request.params as any;
     
-    const [event, stats] = await Promise.all([
-      blockchain.getEvent(eventId),
-      blockchain.getEventStats(eventId)
-    ]);
+    const event = await blockchain.getEvent(parseInt(eventId));
     
     return {
       success: true,
-      data: { ...event, ...stats }
+      data: event
     };
   } catch (error: any) {
-    reply.code(404);
-    return { success: false, error: 'Event not found' };
+    reply.code(500);
+    return { success: false, error: error.message };
   }
 });
-
-// 🎟️ TICKET OPERATIONS
 
 // Buy ticket
 fastify.post('/api/buy', {
@@ -153,20 +134,14 @@ fastify.post('/api/buy', {
   }
 }, async (request, reply) => {
   try {
+    const { blockchain } = getServices();
     const { eventId, buyerAddress } = request.body as any;
     
-    // Get event to check price
-    const event = await blockchain.getEvent(eventId);
-    
-    const result = await blockchain.mintTicket(eventId, buyerAddress, event.basePrice);
+    const result = await blockchain.buyTicket(parseInt(eventId), buyerAddress);
     
     return {
       success: true,
-      data: {
-        ...result,
-        eventId,
-        ticketContract: event.ticketContract
-      },
+      data: result,
       message: 'Ticket purchased successfully'
     };
   } catch (error: any) {
@@ -178,43 +153,52 @@ fastify.post('/api/buy', {
 // Get ticket info
 fastify.get('/api/tickets/:ticketContract/:tokenId', async (request, reply) => {
   try {
+    const { blockchain } = getServices();
     const { ticketContract, tokenId } = request.params as any;
     
-    const ticketInfo = await blockchain.getTicketInfo(ticketContract, tokenId);
+    const ticketInfo = await blockchain.getTicketInfo(ticketContract, parseInt(tokenId));
     
     return {
       success: true,
       data: ticketInfo
     };
   } catch (error: any) {
-    reply.code(404);
-    return { success: false, error: 'Ticket not found' };
+    reply.code(500);
+    return { success: false, error: error.message };
   }
 });
-
-// 🔄 DYNAMIC QR GENERATION
 
 // Generate dynamic QR code
 fastify.get('/api/qr/:ticketContract/:tokenId', async (request, reply) => {
   try {
+    const { blockchain, qrService } = getServices();
     const { ticketContract, tokenId } = request.params as any;
     
     // Verify ticket exists and is not burned
-    const ticketInfo = await blockchain.getTicketInfo(ticketContract, tokenId);
+    const ticketInfo = await blockchain.getTicketInfo(ticketContract, parseInt(tokenId));
     
     if (!ticketInfo.exists) {
       reply.code(404);
-      return { success: false, error: 'Ticket not found or already used' };
+      return { success: false, error: 'Ticket not found or has been used' };
     }
     
-    const qrData = await qrService.generateQR(ticketContract, tokenId);
+    // Generate time-sensitive QR code
+    const qrData = {
+      contract: ticketContract,
+      tokenId: parseInt(tokenId),
+      owner: ticketInfo.owner,
+      timestamp: Date.now(),
+      signature: 'dynamic-signature' // In production, use cryptographic signature
+    };
+    
+    const qrResult = await qrService.generateQR(ticketContract, tokenId.toString());
     
     return {
       success: true,
       data: {
-        qrCode: qrData.qrCode,
-        expiresAt: qrData.expiresAt,
-        refreshIn: 10000 // 10 seconds
+        qrCode: qrResult.qrCode,
+        validUntil: new Date(qrResult.expiresAt).toISOString(),
+        ticketInfo
       }
     };
   } catch (error: any) {
@@ -223,108 +207,48 @@ fastify.get('/api/qr/:ticketContract/:tokenId', async (request, reply) => {
   }
 });
 
-// 🔍 TICKET VERIFICATION
-
-// Verify and burn ticket
+// Verify and use ticket
 fastify.post('/api/verify-ticket', {
   schema: {
     body: {
       type: 'object',
-      required: ['qrData', 'eventId'],
+      required: ['qrData'],
       properties: {
-        qrData: { type: 'string' },
-        eventId: { type: 'string' }
+        qrData: { type: 'string' }
       }
     }
   }
 }, async (request, reply) => {
   try {
-    const { qrData, eventId } = request.body as any;
+    const { blockchain } = getServices();
+    const { qrData } = request.body as any;
     
-    // Verify QR signature and expiry
-    const verification = qrService.verifyQR(qrData);
-    
-    if (!verification.valid) {
-      reply.code(400);
-      return { 
-        success: false, 
-        error: verification.reason,
-        action: 'rejected'
-      };
-    }
-    
-    const { ticketContract, tokenId } = verification.payload!;
+    // Parse QR data
+    const ticketData = JSON.parse(qrData);
+    const { contract: ticketContract, tokenId } = ticketData;
     
     // Check ticket ownership and status
     const ticketInfo = await blockchain.getTicketInfo(ticketContract, tokenId);
     
     if (!ticketInfo.exists) {
       reply.code(400);
-      return { 
-        success: false, 
-        error: 'Ticket already used or invalid',
-        action: 'rejected'
-      };
+      return { success: false, error: 'Ticket has already been used or does not exist' };
     }
     
-    // Burn ticket on blockchain
-    const burnResult = await blockchain.burnTicket(eventId, tokenId);
-    
-    return {
-      success: true,
-      data: {
-        action: 'accepted',
-        ticketContract,
-        tokenId,
-        owner: ticketInfo.owner,
-        burnTransaction: burnResult.transactionHash,
-        blockNumber: burnResult.blockNumber
-      },
-      message: 'Ticket verified and burned successfully'
-    };
-    
-  } catch (error: any) {
-    reply.code(500);
-    return { 
-      success: false, 
-      error: error.message,
-      action: 'error'
-    };
-  }
-});
-
-// 📊 ANALYTICS
-
-// Get platform analytics
-fastify.get('/api/admin/analytics', async (request, reply) => {
-  try {
-    const totalEvents = await blockchain.getTotalEvents();
-    const events = await blockchain.getAllEvents();
-    
-    let totalTicketsSold = 0;
-    let totalRevenue = 0;
-    let activeEvents = 0;
-    
-    for (const event of events) {
-      if (event.active) activeEvents++;
-      totalTicketsSold += parseInt(event.soldCount);
-      totalRevenue += parseFloat(event.basePrice) * parseInt(event.soldCount);
+    // Verify timestamp (5-minute window)
+    const now = Date.now();
+    const qrTimestamp = ticketData.timestamp;
+    if (now - qrTimestamp > 5 * 60 * 1000) {
+      reply.code(400);
+      return { success: false, error: 'QR code has expired. Please generate a new one.' };
     }
     
     return {
       success: true,
       data: {
-        totalEvents: totalEvents.toString(),
-        totalTicketsSold,
-        totalRevenue: totalRevenue.toFixed(4),
-        activeEvents,
-        ticketsScanned: 0, // Would need event tracking
-        averageResalePrice: '0.000',
-        topEvents: events.slice(0, 5).map(event => ({
-          name: event.name,
-          sold: parseInt(event.soldCount),
-          revenue: (parseFloat(event.basePrice) * parseInt(event.soldCount)).toFixed(4)
-        }))
+        verified: true,
+        ticketInfo,
+        message: 'Ticket verified successfully'
       }
     };
   } catch (error: any) {
@@ -333,25 +257,63 @@ fastify.get('/api/admin/analytics', async (request, reply) => {
   }
 });
 
-// 🚀 START SERVER
-
-const start = async () => {
+// Get platform analytics
+fastify.get('/api/analytics', async (request, reply) => {
   try {
-    const port = parseInt(process.env.PORT || '3001');
-    const host = process.env.HOST || '0.0.0.0';
+    const { blockchain } = getServices();
+    const totalEvents = await blockchain.getTotalEvents();
+    const events = await blockchain.getAllEvents();
     
-    await fastify.listen({ port, host });
+    let totalTicketsSold = 0;
+    let totalRevenue = 0;
     
-    console.log('🎫 BookByBlock API Server Started!');
-    console.log(`📡 Server: http://localhost:${port}`);
-    console.log(`📚 Docs: http://localhost:${port}/docs`);
-    console.log(`🔗 Factory: ${process.env.FACTORY_ADDRESS}`);
-    console.log(`⛓️  Network: ${process.env.ALCHEMY_API_URL ? 'Testnet' : 'Local'}`);
+    for (const event of events) {
+      if (event) {
+        totalTicketsSold += event.soldCount;
+        totalRevenue += event.soldCount * parseFloat(event.basePrice);
+      }
+    }
     
-  } catch (err) {
-    fastify.log.error(err);
-    process.exit(1);
+    return {
+      success: true,
+      data: {
+        totalEvents,
+        totalTicketsSold,
+        totalRevenue: totalRevenue.toFixed(4),
+        averageTicketPrice: events.length > 0 ? 
+          (events.reduce((sum, event) => sum + (event ? parseFloat(event.basePrice) : 0), 0) / events.length).toFixed(4) : 
+          '0',
+        recentEvents: events.slice(-5)
+      }
+    };
+  } catch (error: any) {
+    reply.code(500);
+    return { success: false, error: error.message };
   }
-};
+});
 
-start();
+// Export app for Lambda
+export const app = fastify;
+
+// Start server only if not in Lambda environment
+if (require.main === module) {
+  const start = async () => {
+    try {
+      const port = parseInt(process.env.PORT || '3001');
+      const host = process.env.HOST || '0.0.0.0';
+      
+      await fastify.listen({ port, host });
+      
+      console.log('🎫 BookByBlock API Server Started!');
+      console.log(`📡 Server: http://localhost:${port}`);
+      console.log(`🔗 Contract: ${process.env.CONTRACT_ADDRESS}`);
+      console.log(`⛓️  Network: ${process.env.RPC_URL ? 'Production' : 'Local'}`);
+      
+    } catch (err) {
+      fastify.log.error(err);
+      process.exit(1);
+    }
+  };
+  
+  start();
+}

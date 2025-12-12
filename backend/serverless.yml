@@ -1,0 +1,43 @@
+service: bookbyblock-api
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  stage: prod
+  memorySize: 512
+  timeout: 30
+  environment:
+    NODE_ENV: production
+    PRIVATE_KEY: ${env:PRIVATE_KEY, '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'}
+    CONTRACT_ADDRESS: ${env:CONTRACT_ADDRESS, '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6'}
+    RPC_URL: ${env:RPC_URL, 'https://polygon-rpc.com'}
+
+functions:
+  api:
+    handler: dist/lambda.handler
+    events:
+      - http:
+          path: /{proxy+}
+          method: ANY
+          cors: true
+      - http:
+          path: /
+          method: ANY
+          cors: true
+
+plugins:
+  - serverless-offline
+
+package:
+  exclude:
+    - src/**
+    - .env*
+    - README.md
+    - tsconfig.json
+    - "*.md"
+  include:
+    - dist/**
+    - node_modules/**

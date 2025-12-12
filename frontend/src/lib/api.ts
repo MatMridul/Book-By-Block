@@ -1,10 +1,38 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// API Configuration for AWS deployment
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://jinh0b09t6.execute-api.us-east-1.amazonaws.com/prod';
+
+// Helper function for API calls with error handling
+async function apiCall(endpoint: string, options: RequestInit = {}) {
+  const url = `${API_BASE}${endpoint}`;
+  
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+}
 
 export const api = {
+  // Health check
+  async health() {
+    return apiCall('/health');
+  },
+
   // Events
   async getEvents() {
-    const response = await fetch(`${API_BASE}/api/events`);
-    return response.json();
+    return apiCall('/api/events');
+  },
+
+  async getEvent(eventId: string) {
+    return apiCall(`/api/events/${eventId}`);
   },
 
   async createEvent(data: {
@@ -13,35 +41,33 @@ export const api = {
     basePrice: string;
     totalSupply: number;
   }) {
-    const response = await fetch(`${API_BASE}/api/admin/create-event`, {
+    return apiCall('/api/admin/create-event', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return response.json();
   },
 
   // Tickets
   async buyTicket(eventId: string, walletAddress: string) {
-    const response = await fetch(`${API_BASE}/api/buy`, {
+    return apiCall('/api/buy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ eventId, buyerAddress: walletAddress })
     });
-    return response.json();
   },
 
   async getQR(contract: string, tokenId: string) {
-    const response = await fetch(`${API_BASE}/api/qr/${contract}/${tokenId}`);
-    return response.json();
+    return apiCall(`/api/qr/${contract}/${tokenId}`);
   },
 
   async verifyTicket(payload: any) {
-    const response = await fetch(`${API_BASE}/api/verify-ticket`, {
+    return apiCall('/api/verify-ticket', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    return response.json();
+  },
+
+  // Analytics
+  async getAnalytics() {
+    return apiCall('/api/analytics');
   }
 };
