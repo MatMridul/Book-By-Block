@@ -8,26 +8,28 @@ async function main() {
   console.log("📝 Deploying with account:", deployer.address);
   
   // Check balance
-  const balance = await deployer.getBalance();
-  console.log("💰 Account balance:", ethers.utils.formatEther(balance), "ETH");
+  const balance = await deployer.provider.getBalance(deployer.address);
+  console.log("💰 Account balance:", ethers.formatEther(balance), "MATIC");
   
   // Deploy EventFactory
   console.log("\n🏭 Deploying EventFactory...");
   const EventFactory = await ethers.getContractFactory("EventFactory");
   const factory = await EventFactory.deploy(deployer.address); // Fee recipient = deployer
   
-  await factory.deployed();
-  console.log("✅ EventFactory deployed to:", factory.address);
+  await factory.waitForDeployment();
+  const factoryAddress = await factory.getAddress();
+  console.log("✅ EventFactory deployed to:", factoryAddress);
   
   // Save deployment info
+  const network = await ethers.provider.getNetwork();
   const deploymentInfo = {
     network: hre.network.name,
-    chainId: (await ethers.provider.getNetwork()).chainId,
+    chainId: Number(network.chainId),
     deployer: deployer.address,
     contracts: {
       EventFactory: {
-        address: factory.address,
-        deploymentHash: factory.deployTransaction.hash
+        address: factoryAddress,
+        deploymentHash: factory.deploymentTransaction().hash
       }
     },
     timestamp: new Date().toISOString(),
@@ -37,8 +39,8 @@ async function main() {
   console.log("\n📋 Deployment Summary:");
   console.log("Network:", deploymentInfo.network);
   console.log("Chain ID:", deploymentInfo.chainId);
-  console.log("Factory Address:", factory.address);
-  console.log("Deployment Hash:", factory.deployTransaction.hash);
+  console.log("Factory Address:", factoryAddress);
+  console.log("Deployment Hash:", factory.deploymentTransaction().hash);
   
   // Create sample event for testing
   if (hre.network.name === "localhost") {
@@ -47,17 +49,25 @@ async function main() {
     const tx = await factory.createEvent(
       "Sample Concert",
       "CONCERT",
-      ethers.utils.parseEther("0.01"), // 0.01 ETH base price
+      ethers.parseEther("0.01"), // 0.01 MATIC base price
       100 // 100 tickets
     );
     
     const receipt = await tx.wait();
-    const eventCreatedEvent = receipt.events?.find(e => e.event === "EventCreated");
+    const eventCreatedEvent = receipt.logs?.find(log => {
+      try {
+        const parsed = factory.interface.parseLog(log);
+        return parsed.name === "EventCreated";
+      } catch {
+        return false;
+      }
+    });
     
     if (eventCreatedEvent) {
+      const parsedEvent = factory.interface.parseLog(eventCreatedEvent);
       console.log("✅ Sample event created:");
-      console.log("Event ID:", eventCreatedEvent.args.eventId.toString());
-      console.log("Ticket Contract:", eventCreatedEvent.args.ticketContract);
+      console.log("Event ID:", parsedEvent.args.eventId.toString());
+      console.log("Ticket Contract:", parsedEvent.args.ticketContract);
     }
   }
   
@@ -79,13 +89,19 @@ async function main() {
   
   // Environment variables for backend
   console.log("\n🔧 Add these to your .env file:");
-  console.log(`FACTORY_ADDRESS=${factory.address}`);
+  console.log(`FACTORY_ADDRESS=${factoryAddress}`);
   console.log(`NETWORK=${hre.network.name}`);
   console.log(`CHAIN_ID=${deploymentInfo.chainId}`);
   
   if (hre.network.name !== "localhost") {
     console.log("\n🔍 Verify contracts with:");
-    console.log(`npx hardhat verify --network ${hre.network.name} ${factory.address} ${deployer.address}`);
+    console.log(`npx hardhat verify --network ${hre.network.name} ${factoryAddress} ${deployer.address}`);
+    console.log(`\n🌐 View on Polygonscan:`);
+    if (hre.network.name === "amoy") {
+      console.log(`https://amoy.polygonscan.com/address/${factoryAddress}`);
+    } else {
+      console.log(`https://polygonscan.com/address/${factoryAddress}`);
+    }
   }
   
   console.log("\n🎉 Deployment complete! Ready for hackathon demo! 🚀");

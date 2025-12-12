@@ -17,10 +17,10 @@ module.exports = {
       url: "http://127.0.0.1:8545",
       chainId: 31337
     },
-    mumbai: {
-      url: process.env.ALCHEMY_API_URL || "https://polygon-mumbai.g.alchemy.com/v2/demo",
+    amoy: {
+      url: process.env.ALCHEMY_API_URL || "https://rpc-amoy.polygon.technology",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 80001
+      chainId: 80002
     },
     polygon: {
       url: "https://polygon-rpc.com/",
@@ -30,8 +30,18 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      polygonMumbai: process.env.POLYGONSCAN_API_KEY || ""
-    }
+      polygonAmoy: process.env.POLYGONSCAN_API_KEY || ""
+    },
+    customChains: [
+      {
+        network: "polygonAmoy",
+        chainId: 80002,
+        urls: {
+          apiURL: "https://api-amoy.polygonscan.com/api",
+          browserURL: "https://amoy.polygonscan.com"
+        }
+      }
+    ]
   },
   gasReporter: {
     enabled: true,

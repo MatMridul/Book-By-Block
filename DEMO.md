@@ -16,11 +16,11 @@
 ```bash
 # Show terminal
 cd contracts
-npx hardhat run scripts/deploy.js --network mumbai
+npx hardhat run scripts/deploy.js --network amoy
 
 # Point to Polygonscan
-"✅ Smart contracts deployed live on Polygon testnet"
-"🔗 View on blockchain: https://mumbai.polygonscan.com/tx/[hash]"
+"✅ Smart contracts deployed live on Polygon Amoy testnet"
+"🔗 View on blockchain: https://amoy.polygonscan.com/tx/[hash]"
 ```
 
 ### **3. Event Creation (45 seconds)**
@@ -31,7 +31,7 @@ npx hardhat run scripts/deploy.js --network mumbai
 
 ### **4. Ticket Purchase (45 seconds)**
 - Browse to event page
-- Enter wallet address: `0x742d35Cc6634C0532925a3b8D4C9db96590b5c8e`
+- Enter wallet address: `0x7270c5186c95cfd847d3321d2e873d6a52e57d6e`
 - Buy ticket → show minting transaction
 - "NFT ticket minted to buyer's wallet with immutable ownership"
 
@@ -141,7 +141,7 @@ The $85B live events industry is ready for Web3 disruption. BookByBlock is that 
 ## 📱 **Demo URLs**
 - **Live Demo**: https://bookbyblock.vercel.app
 - **GitHub**: https://github.com/[username]/bookbyblock
-- **Contracts**: https://mumbai.polygonscan.com
+- **Contracts**: https://amoy.polygonscan.com
 - **API Docs**: https://bookbyblock-api.vercel.app/docs
 
 **Ready to disrupt ticketing! 🚀**

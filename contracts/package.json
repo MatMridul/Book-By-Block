@@ -6,8 +6,8 @@
     "compile": "hardhat compile",
     "test": "hardhat test",
     "deploy:local": "hardhat run scripts/deploy.js --network localhost",
-    "deploy:mumbai": "hardhat run scripts/deploy.js --network mumbai",
-    "verify": "hardhat verify --network mumbai",
+    "deploy:amoy": "hardhat run scripts/deploy.js --network amoy",
+    "verify": "hardhat verify --network amoy",
     "node": "hardhat node",
     "clean": "hardhat clean"
   },

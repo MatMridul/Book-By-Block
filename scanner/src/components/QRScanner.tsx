@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Html5QrcodeScanner, Html5QrcodeScannerConfig } from 'html5-qrcode'
+import { Html5QrcodeScanner } from 'html5-qrcode'
 
 interface QRScannerProps {
   onScan: (data: string) => void
@@ -15,7 +15,7 @@ export function QRScanner({ onScan, isScanning }: QRScannerProps) {
   useEffect(() => {
     if (!isScanning) return
 
-    const config: Html5QrcodeScannerConfig = {
+    const config = {
       fps: 10,
       qrbox: { width: 250, height: 250 },
       aspectRatio: 1.0,

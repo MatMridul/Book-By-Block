@@ -113,6 +113,23 @@ contract Ticket is ERC721, Ownable {
     }
     
     /**
+     * @dev Override _update to control transfers
+     */
+    function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
+        address from = _ownerOf(tokenId);
+        
+        // Allow minting (from == address(0)) and burning (to == address(0))
+        if (from == address(0) || to == address(0)) {
+            return super._update(to, tokenId, auth);
+        }
+        
+        // Only allow transfers through factory
+        require(msg.sender == factory, "Use controlled transfer only");
+        
+        return super._update(to, tokenId, auth);
+    }
+
+    /**
      * @dev Get ticket info
      */
     function getTicketInfo(uint256 tokenId) external view returns (
