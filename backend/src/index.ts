@@ -12,9 +12,33 @@ const fastify = Fastify({ logger: true });
 const blockchain = new BlockchainService();
 const qrService = new QRService();
 
-// CORS setup
+// CORS setup - CRITICAL for production deployment
 fastify.register(cors, {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000'
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'https://bookbyblock.netlify.app',
+      'https://*.netlify.app',
+      'https://vercel.app',
+      'https://*.vercel.app'
+    ];
+    
+    // Allow requests with no origin (mobile apps, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin matches any allowed pattern
+    const isAllowed = allowedOrigins.some(pattern => {
+      if (pattern.includes('*')) {
+        const regex = new RegExp(pattern.replace('*', '.*'));
+        return regex.test(origin);
+      }
+      return pattern === origin;
+    });
+    
+    callback(null, isAllowed);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 });
 
 // Swagger documentation
@@ -72,6 +96,20 @@ fastify.post('/api/admin/create-event', {
       success: true,
       data: result,
       message: 'Event created successfully'
+    };
+  } catch (error: any) {
+    reply.code(500);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get all events
+fastify.get('/api/events', async (request, reply) => {
+  try {
+    const events = await blockchain.getAllEvents();
+    return {
+      success: true,
+      data: events
     };
   } catch (error: any) {
     reply.code(500);
@@ -260,21 +298,33 @@ fastify.post('/api/verify-ticket', {
 // Get platform analytics
 fastify.get('/api/admin/analytics', async (request, reply) => {
   try {
-    // This would typically query a database
-    // For demo, return mock data
+    const totalEvents = await blockchain.getTotalEvents();
+    const events = await blockchain.getAllEvents();
+    
+    let totalTicketsSold = 0;
+    let totalRevenue = 0;
+    let activeEvents = 0;
+    
+    for (const event of events) {
+      if (event.active) activeEvents++;
+      totalTicketsSold += parseInt(event.soldCount);
+      totalRevenue += parseFloat(event.basePrice) * parseInt(event.soldCount);
+    }
+    
     return {
       success: true,
       data: {
-        totalEvents: 5,
-        totalTicketsSold: 247,
-        totalRevenue: '12.35',
-        activeEvents: 3,
-        ticketsScanned: 89,
-        averageResalePrice: '0.011',
-        topEvents: [
-          { name: 'Concert A', sold: 98, revenue: '4.9' },
-          { name: 'Festival B', sold: 75, revenue: '3.75' }
-        ]
+        totalEvents: totalEvents.toString(),
+        totalTicketsSold,
+        totalRevenue: totalRevenue.toFixed(4),
+        activeEvents,
+        ticketsScanned: 0, // Would need event tracking
+        averageResalePrice: '0.000',
+        topEvents: events.slice(0, 5).map(event => ({
+          name: event.name,
+          sold: parseInt(event.soldCount),
+          revenue: (parseFloat(event.basePrice) * parseInt(event.soldCount)).toFixed(4)
+        }))
       }
     };
   } catch (error: any) {

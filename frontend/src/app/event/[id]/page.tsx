@@ -2,81 +2,60 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Calendar, MapPin, Users, Clock, Shield, Zap, ArrowLeft } from 'lucide-react'
-import Link from 'next/link'
+import { Calendar, MapPin, Users, Shield, Zap } from 'lucide-react'
+import { api } from '@/lib/api'
 
-interface EventDetails {
-  id: string
+interface Event {
+  eventId: string
   name: string
-  description: string
-  longDescription: string
-  date: string
-  venue: string
-  price: string
+  ticketContract: string
+  basePrice: string
   totalSupply: string
   soldCount: string
-  category: string
-  organizer: string
-  features: string[]
+  active: boolean
+  creator: string
 }
 
 export default function EventPage() {
   const params = useParams()
-  const [event, setEvent] = useState<EventDetails | null>(null)
+  const eventId = params.id as string
+  
+  const [event, setEvent] = useState<Event | null>(null)
   const [loading, setLoading] = useState(true)
-  const [purchasing, setPurchasing] = useState(false)
   const [walletAddress, setWalletAddress] = useState('')
+  const [purchasing, setPurchasing] = useState(false)
+  const [result, setResult] = useState<any>(null)
 
   useEffect(() => {
-    // Mock event data
-    setTimeout(() => {
-      setEvent({
-        id: params.id as string,
-        name: 'Blockchain Summit 2024',
-        description: 'The future of decentralized technology',
-        longDescription: 'Join industry leaders, developers, and innovators for the most comprehensive blockchain conference of the year. Explore the latest in DeFi, NFTs, Web3, and enterprise blockchain solutions.',
-        date: '2024-01-15T10:00:00Z',
-        venue: 'Tech Convention Center, San Francisco',
-        price: '0.05',
-        totalSupply: '500',
-        soldCount: '342',
-        category: 'Conference',
-        organizer: 'Blockchain Foundation',
-        features: ['Anti-scalping protection', 'Dynamic QR verification', 'Resale controls', 'Blockchain ownership']
-      })
-      setLoading(false)
-    }, 1000)
-  }, [params.id])
-
-  const handlePurchase = async () => {
-    if (!walletAddress) {
-      alert('Please enter your wallet address')
-      return
-    }
-
-    setPurchasing(true)
-    
-    try {
-      // Mock purchase API call
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/buy`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          eventId: event?.id,
-          buyerAddress: walletAddress
-        })
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        alert(`Ticket purchased! Token ID: ${result.data.tokenId}`)
-        // Redirect to ticket page
-        window.location.href = `/ticket/${result.data.ticketContract}/${result.data.tokenId}`
-      } else {
-        throw new Error('Purchase failed')
+    async function loadEvent() {
+      try {
+        const response = await api.getEvents()
+        if (response.success) {
+          const foundEvent = response.data?.find((e: Event) => e.eventId === eventId)
+          setEvent(foundEvent || null)
+        }
+      } catch (error) {
+        console.error('Failed to load event:', error)
+      } finally {
+        setLoading(false)
       }
+    }
+    
+    if (eventId) {
+      loadEvent()
+    }
+  }, [eventId])
+
+  const handlePurchase = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!event || !walletAddress) return
+    
+    setPurchasing(true)
+    try {
+      const response = await api.buyTicket(eventId, walletAddress)
+      setResult(response)
     } catch (error) {
-      alert('Purchase failed. Please try again.')
+      setResult({ success: false, error: 'Failed to purchase ticket' })
     } finally {
       setPurchasing(false)
     }
@@ -84,22 +63,10 @@ export default function EventPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen py-8">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <div className="h-8 bg-dark-border rounded shimmer mb-8 w-1/4"></div>
-            <div className="grid lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2">
-                <div className="w-full h-64 bg-dark-border rounded-xl shimmer mb-6"></div>
-                <div className="h-8 bg-dark-border rounded shimmer mb-4"></div>
-                <div className="h-4 bg-dark-border rounded shimmer mb-2 w-3/4"></div>
-                <div className="h-4 bg-dark-border rounded shimmer mb-6 w-1/2"></div>
-              </div>
-              <div className="card">
-                <div className="h-32 bg-dark-border rounded shimmer"></div>
-              </div>
-            </div>
-          </div>
+      <div className="min-h-screen bg-[#0D0D0D] text-[#E6E6E6] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7C3AED] mx-auto mb-4"></div>
+          <p>Loading event...</p>
         </div>
       </div>
     )
@@ -107,171 +74,119 @@ export default function EventPage() {
 
   if (!event) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-[#0D0D0D] text-[#E6E6E6] flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Event Not Found</h1>
-          <Link href="/" className="btn-primary">
-            Back to Events
-          </Link>
+          <p className="text-gray-400">The event you're looking for doesn't exist.</p>
         </div>
       </div>
     )
   }
 
-  const soldPercentage = (parseInt(event.soldCount) / parseInt(event.totalSupply)) * 100
+  const availableTickets = parseInt(event.totalSupply) - parseInt(event.soldCount)
+  const soldOut = availableTickets <= 0
 
   return (
-    <div className="min-h-screen py-8">
-      <div className="container mx-auto px-4">
-        <div className="max-w-4xl mx-auto">
-          {/* Back Button */}
-          <Link href="/" className="flex items-center text-dark-muted hover:text-primary-purple mb-8 transition-colors">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Events
-          </Link>
+    <div className="min-h-screen bg-[#0D0D0D] text-[#E6E6E6]">
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-[#1A1A1A] rounded-lg overflow-hidden">
+          <div className="h-64 bg-gradient-to-r from-[#7C3AED] to-[#24E3C0] flex items-center justify-center">
+            <h1 className="text-4xl font-bold text-white text-center">{event.name}</h1>
+          </div>
+          
+          <div className="p-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div>
+                <h2 className="text-2xl font-bold mb-6">Event Details</h2>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Users className="text-[#24E3C0]" size={20} />
+                    <span>{event.soldCount} / {event.totalSupply} tickets sold</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <Shield className="text-[#7C3AED]" size={20} />
+                    <span>Anti-scalping protection enabled</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <Zap className="text-[#24E3C0]" size={20} />
+                    <span>Dynamic QR verification</span>
+                  </div>
+                </div>
 
-          <div className="grid lg:grid-cols-3 gap-8">
-            {/* Event Details */}
-            <div className="lg:col-span-2">
-              {/* Event Image */}
-              <div className="w-full h-64 bg-gradient-to-br from-primary-purple to-accent-mint rounded-xl mb-6 flex items-center justify-center">
-                <div className="text-center text-white">
-                  <div className="text-2xl font-bold mb-2">{event.category}</div>
-                  <div className="text-lg opacity-90">{event.name}</div>
+                <div className="mt-8 p-4 bg-[#0D0D0D] rounded-lg">
+                  <h3 className="font-semibold mb-2">Contract Details</h3>
+                  <p className="text-sm text-gray-400 break-all">{event.ticketContract}</p>
                 </div>
               </div>
-
-              {/* Event Info */}
-              <h1 className="text-4xl font-bold mb-4">{event.name}</h1>
-              <p className="text-xl text-dark-muted mb-6">{event.description}</p>
-
-              {/* Event Details Grid */}
-              <div className="grid md:grid-cols-2 gap-4 mb-8">
-                <div className="flex items-center">
-                  <Calendar className="w-5 h-5 text-primary-purple mr-3" />
-                  <div>
-                    <div className="font-medium">Date & Time</div>
-                    <div className="text-dark-muted">{new Date(event.date).toLocaleString()}</div>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <MapPin className="w-5 h-5 text-primary-purple mr-3" />
-                  <div>
-                    <div className="font-medium">Venue</div>
-                    <div className="text-dark-muted">{event.venue}</div>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <Users className="w-5 h-5 text-primary-purple mr-3" />
-                  <div>
-                    <div className="font-medium">Capacity</div>
-                    <div className="text-dark-muted">{event.totalSupply} tickets</div>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <Clock className="w-5 h-5 text-primary-purple mr-3" />
-                  <div>
-                    <div className="font-medium">Organizer</div>
-                    <div className="text-dark-muted">{event.organizer}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Long Description */}
-              <div className="card">
-                <h3 className="text-xl font-semibold mb-4">About This Event</h3>
-                <p className="text-dark-muted leading-relaxed">{event.longDescription}</p>
-              </div>
-
-              {/* Features */}
-              <div className="card mt-6">
-                <h3 className="text-xl font-semibold mb-4">Web3 Features</h3>
-                <div className="grid md:grid-cols-2 gap-4">
-                  {event.features.map((feature, index) => (
-                    <div key={index} className="flex items-center">
-                      <Shield className="w-4 h-4 text-accent-success mr-2" />
-                      <span className="text-dark-muted">{feature}</span>
+              
+              <div>
+                <div className="bg-[#0D0D0D] rounded-lg p-6">
+                  <h3 className="text-xl font-bold mb-4">Purchase Ticket</h3>
+                  
+                  {result && (
+                    <div className={`p-4 rounded-lg mb-4 ${result.success ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
+                      {result.success ? (
+                        <div>
+                          <p className="text-green-400">Ticket purchased successfully!</p>
+                          <p className="text-sm mt-2">Token ID: {result.data?.tokenId}</p>
+                          <p className="text-sm">TX: {result.data?.transactionHash}</p>
+                        </div>
+                      ) : (
+                        <p className="text-red-400">{result.error}</p>
+                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Purchase Card */}
-            <div className="lg:col-span-1">
-              <div className="card sticky top-24">
-                <div className="text-center mb-6">
-                  <div className="text-3xl font-bold text-primary-purple mb-2">
-                    {event.price} ETH
+                  )}
+                  
+                  <div className="mb-4">
+                    <div className="text-3xl font-bold text-[#7C3AED] mb-2">
+                      {event.basePrice} MATIC
+                    </div>
+                    <p className="text-gray-400">Base price per ticket</p>
                   </div>
-                  <div className="text-dark-muted">per ticket</div>
-                </div>
-
-                {/* Availability */}
-                <div className="mb-6">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span>Sold</span>
-                    <span>{event.soldCount}/{event.totalSupply}</span>
-                  </div>
-                  <div className="w-full bg-dark-border rounded-full h-2">
-                    <div 
-                      className="bg-gradient-to-r from-primary-purple to-accent-mint h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${soldPercentage}%` }}
-                    ></div>
-                  </div>
-                  <div className="text-center text-sm text-dark-muted mt-2">
-                    {Math.round(soldPercentage)}% sold
-                  </div>
-                </div>
-
-                {/* Wallet Input */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium mb-2">
-                    Wallet Address
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="0x..."
-                    value={walletAddress}
-                    onChange={(e) => setWalletAddress(e.target.value)}
-                    className="input w-full"
-                  />
-                  <div className="text-xs text-dark-muted mt-1">
-                    Ticket will be minted to this address
-                  </div>
-                </div>
-
-                {/* Purchase Button */}
-                <button
-                  onClick={handlePurchase}
-                  disabled={purchasing || soldPercentage >= 100}
-                  className={`w-full py-4 rounded-lg font-semibold transition-all duration-200 ${
-                    soldPercentage >= 100
-                      ? 'bg-dark-border text-dark-muted cursor-not-allowed'
-                      : purchasing
-                      ? 'bg-primary-purple-dark text-white cursor-wait'
-                      : 'btn-primary'
-                  }`}
-                >
-                  {soldPercentage >= 100 
-                    ? 'Sold Out' 
-                    : purchasing 
-                    ? 'Processing...' 
-                    : 'Buy Ticket'
-                  }
-                </button>
-
-                {/* Security Features */}
-                <div className="mt-6 pt-6 border-t border-dark-border">
-                  <h4 className="font-semibold mb-3 flex items-center">
-                    <Zap className="w-4 h-4 text-accent-mint mr-2" />
-                    Security Features
-                  </h4>
-                  <div className="space-y-2 text-sm text-dark-muted">
-                    <div>✓ Blockchain ownership verification</div>
-                    <div>✓ Anti-scalping price controls</div>
-                    <div>✓ Dynamic QR code protection</div>
-                    <div>✓ Immutable transaction history</div>
+                  
+                  {!soldOut ? (
+                    <form onSubmit={handlePurchase} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          Wallet Address
+                        </label>
+                        <input
+                          type="text"
+                          value={walletAddress}
+                          onChange={(e) => setWalletAddress(e.target.value)}
+                          placeholder="0x7270c5186c95cfd847d3321d2e873d6a52e57d6e"
+                          className="w-full bg-[#1A1A1A] border border-gray-600 rounded-lg px-3 py-2 text-sm"
+                          required
+                        />
+                        <p className="text-xs text-gray-400 mt-1">
+                          Enter the wallet address to receive the NFT ticket
+                        </p>
+                      </div>
+                      
+                      <button
+                        type="submit"
+                        disabled={purchasing || !walletAddress}
+                        className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 py-3 rounded-lg font-semibold"
+                      >
+                        {purchasing ? 'Processing...' : 'Buy Ticket'}
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-red-400 font-semibold">SOLD OUT</p>
+                      <p className="text-gray-400 text-sm mt-2">
+                        All tickets have been sold
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="mt-4 text-xs text-gray-400">
+                    <p>• Max 2 resales per ticket</p>
+                    <p>• 110% max resale price</p>
+                    <p>• Blockchain verified ownership</p>
                   </div>
                 </div>
               </div>

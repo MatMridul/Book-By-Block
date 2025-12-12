@@ -6,6 +6,7 @@ export const EventFactory__factory = {
     "function useTicket(uint256 eventId, uint256 tokenId)",
     "function getEvent(uint256 eventId) view returns (tuple(uint256 eventId, string name, address ticketContract, uint256 basePrice, uint256 totalSupply, uint256 soldCount, bool active, address creator, uint256 createdAt))",
     "function getEventStats(uint256 eventId) view returns (uint256 totalSupply, uint256 soldCount, uint256 availableCount, bool soldOut)",
+    "function getTotalEvents() view returns (uint256)",
     "event EventCreated(uint256 indexed eventId, string name, address indexed ticketContract, uint256 basePrice, address indexed creator)",
     "event TicketMinted(uint256 indexed eventId, address indexed ticketContract, uint256 indexed tokenId, address buyer, uint256 price)",
     "event TicketUsed(uint256 indexed eventId, address indexed ticketContract, uint256 indexed tokenId, address owner)"

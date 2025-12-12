@@ -3,67 +3,37 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Calendar, MapPin, Users, Zap, Shield, Coins } from 'lucide-react'
+import { api } from '@/lib/api'
 
 interface Event {
-  id: string
+  eventId: string
   name: string
-  description: string
-  date: string
-  venue: string
-  price: string
-  totalSupply: string
-  soldCount: string
-  image: string
-  category: string
+  ticketContract: string
+  basePrice: string
+  totalSupply: number
+  soldCount: number
+  active: boolean
+  creator: string
 }
 
 export default function HomePage() {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Mock events for demo
   useEffect(() => {
-    setTimeout(() => {
-      setEvents([
-        {
-          id: '1',
-          name: 'Blockchain Summit 2024',
-          description: 'The future of decentralized technology',
-          date: '2024-01-15',
-          venue: 'Tech Convention Center',
-          price: '0.05',
-          totalSupply: '500',
-          soldCount: '342',
-          image: '/api/placeholder/400/300',
-          category: 'Conference'
-        },
-        {
-          id: '2', 
-          name: 'Web3 Music Festival',
-          description: 'NFT artists and crypto beats',
-          date: '2024-01-20',
-          venue: 'Digital Arena',
-          price: '0.08',
-          totalSupply: '1000',
-          soldCount: '756',
-          image: '/api/placeholder/400/300',
-          category: 'Music'
-        },
-        {
-          id: '3',
-          name: 'DeFi Workshop Series',
-          description: 'Learn decentralized finance',
-          date: '2024-01-25',
-          venue: 'Innovation Hub',
-          price: '0.03',
-          totalSupply: '200',
-          soldCount: '89',
-          image: '/api/placeholder/400/300',
-          category: 'Education'
+    async function loadEvents() {
+      try {
+        const response = await api.getEvents()
+        if (response.success) {
+          setEvents(response.data || [])
         }
-      ])
-      setLoading(false)
-    }, 1000)
+      } catch (error) {
+        console.error('Failed to load events:', error)
+        setEvents([])
+      } finally {
+        setLoading(false)
+      }
+    }
   }, [])
 
   return (

@@ -7,8 +7,18 @@ export class BlockchainService {
   private factory: ethers.Contract;
 
   constructor() {
+    if (!process.env.ALCHEMY_API_URL) {
+      throw new Error('ALCHEMY_API_URL environment variable is required');
+    }
+    if (!process.env.PRIVATE_KEY) {
+      throw new Error('PRIVATE_KEY environment variable is required');
+    }
+    if (!process.env.FACTORY_ADDRESS) {
+      throw new Error('FACTORY_ADDRESS environment variable is required');
+    }
+
     this.provider = new ethers.providers.JsonRpcProvider(
-      process.env.ALCHEMY_API_URL || 'http://localhost:8545'
+      process.env.ALCHEMY_API_URL
     );
     
     this.signer = new ethers.Wallet(
@@ -120,5 +130,25 @@ export class BlockchainService {
       creator: event.creator,
       createdAt: new Date(event.createdAt.toNumber() * 1000).toISOString()
     };
+  }
+
+  async getAllEvents() {
+    const totalEvents = await this.factory.getTotalEvents();
+    const events = [];
+    
+    for (let i = 1; i <= totalEvents.toNumber(); i++) {
+      try {
+        const event = await this.getEvent(i.toString());
+        events.push(event);
+      } catch (error) {
+        console.error(`Failed to load event ${i}:`, error);
+      }
+    }
+    
+    return events;
+  }
+
+  async getTotalEvents() {
+    return await this.factory.getTotalEvents();
   }
 }

@@ -1,25 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Plus, TrendingUp, Users, DollarSign, Shield, BarChart3 } from 'lucide-react'
-
-interface Analytics {
-  totalEvents: number
-  totalTicketsSold: number
-  totalRevenue: string
-  activeEvents: number
-  ticketsScanned: number
-  averageResalePrice: string
-  topEvents: Array<{
-    name: string
-    sold: number
-    revenue: string
-  }>
-}
+import { useState } from 'react'
+import { Plus } from 'lucide-react'
+import { api } from '@/lib/api'
 
 export default function AdminPage() {
-  const [analytics, setAnalytics] = useState<Analytics | null>(null)
-  const [loading, setLoading] = useState(true)
   const [showCreateEvent, setShowCreateEvent] = useState(false)
   const [eventForm, setEventForm] = useState({
     name: '',
@@ -28,6 +13,142 @@ export default function AdminPage() {
     totalSupply: ''
   })
   const [creating, setCreating] = useState(false)
+  const [result, setResult] = useState<any>(null)
+
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCreating(true)
+    
+    try {
+      const response = await api.createEvent({
+        name: eventForm.name,
+        symbol: eventForm.symbol,
+        basePrice: eventForm.basePrice,
+        totalSupply: parseInt(eventForm.totalSupply)
+      })
+      
+      setResult(response)
+      if (response.success) {
+        setEventForm({ name: '', symbol: '', basePrice: '', totalSupply: '' })
+        setShowCreateEvent(false)
+      }
+    } catch (error) {
+      setResult({ success: false, error: 'Failed to create event' })
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0D0D0D] text-[#E6E6E6] p-6">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
+        
+        {result && (
+          <div className={`p-4 rounded-lg mb-6 ${result.success ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
+            {result.success ? (
+              <div>
+                <p className="text-green-400">Event created successfully!</p>
+                <p className="text-sm mt-2">Event ID: {result.data?.eventId}</p>
+                <p className="text-sm">Contract: {result.data?.ticketContract}</p>
+                <p className="text-sm">TX: {result.data?.transactionHash}</p>
+              </div>
+            ) : (
+              <p className="text-red-400">{result.error}</p>
+            )}
+          </div>
+        )}
+
+        <div className="bg-[#1A1A1A] rounded-lg p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-semibold">Events</h2>
+            <button
+              onClick={() => setShowCreateEvent(!showCreateEvent)}
+              className="bg-[#7C3AED] hover:bg-[#6D28D9] px-4 py-2 rounded-lg flex items-center gap-2"
+            >
+              <Plus size={20} />
+              Create Event
+            </button>
+          </div>
+
+          {showCreateEvent && (
+            <form onSubmit={handleCreateEvent} className="bg-[#0D0D0D] p-6 rounded-lg mb-6">
+              <h3 className="text-lg font-semibold mb-4">Create New Event</h3>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Event Name</label>
+                  <input
+                    type="text"
+                    value={eventForm.name}
+                    onChange={(e) => setEventForm({...eventForm, name: e.target.value})}
+                    className="w-full bg-[#1A1A1A] border border-gray-600 rounded-lg px-3 py-2"
+                    placeholder="Hackathon Demo Concert"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-2">Symbol</label>
+                  <input
+                    type="text"
+                    value={eventForm.symbol}
+                    onChange={(e) => setEventForm({...eventForm, symbol: e.target.value})}
+                    className="w-full bg-[#1A1A1A] border border-gray-600 rounded-lg px-3 py-2"
+                    placeholder="HDC"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-2">Base Price (MATIC)</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={eventForm.basePrice}
+                    onChange={(e) => setEventForm({...eventForm, basePrice: e.target.value})}
+                    className="w-full bg-[#1A1A1A] border border-gray-600 rounded-lg px-3 py-2"
+                    placeholder="0.01"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-2">Total Supply</label>
+                  <input
+                    type="number"
+                    value={eventForm.totalSupply}
+                    onChange={(e) => setEventForm({...eventForm, totalSupply: e.target.value})}
+                    className="w-full bg-[#1A1A1A] border border-gray-600 rounded-lg px-3 py-2"
+                    placeholder="100"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-4 mt-6">
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 px-6 py-2 rounded-lg"
+                >
+                  {creating ? 'Creating...' : 'Create Event'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateEvent(false)}
+                  className="bg-gray-600 hover:bg-gray-700 px-6 py-2 rounded-lg"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
   useEffect(() => {
     const fetchAnalytics = async () => {
