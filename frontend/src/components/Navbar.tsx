@@ -33,7 +33,7 @@ export function Navbar() {
               Admin
             </Link>
             <a 
-              href={process.env.NEXT_PUBLIC_SCANNER_URL || 'https://scanner.bookbyblock.com'} 
+              href={process.env.NEXT_PUBLIC_SCANNER_URL || 'http://localhost:3002'} 
               target="_blank" 
               rel="noopener noreferrer"
               className="flex items-center space-x-2 hover:text-accent-mint transition-colors"
@@ -90,7 +90,7 @@ export function Navbar() {
                 Admin
               </Link>
               <a 
-                href={process.env.NEXT_PUBLIC_SCANNER_URL || 'https://scanner.bookbyblock.com'} 
+                href={process.env.NEXT_PUBLIC_SCANNER_URL || 'http://localhost:3002'} 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="flex items-center space-x-2 hover:text-accent-mint transition-colors"

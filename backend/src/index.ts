@@ -241,7 +241,7 @@ app.post('/api/verify-ticket', async (req, res) => {
     const [ticketInfo, eventInfo, seatInfo] = await Promise.all([
       blockchain.getTicketInfo(ticketContract, parseInt(tokenId)),
       eventId ? blockchain.getEvent(parseInt(eventId)) : null,
-      blockchain.getTicketSeatInfo(parseInt(eventId), parseInt(tokenId))
+      blockchain.getTicketInfo(eventId.toString(), parseInt(tokenId))
     ]);
     
     if (!ticketInfo.exists) {

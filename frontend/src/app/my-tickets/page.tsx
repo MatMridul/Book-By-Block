@@ -23,9 +23,9 @@ export default function MyTicketsPage() {
   const [error, setError] = useState<string | null>(null)
 
   const connectWallet = async () => {
-    if (typeof window !== 'undefined' && window.ethereum) {
+    if (typeof window !== 'undefined' && (window as any).ethereum) {
       try {
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
+        const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' })
         setWalletAddress(accounts[0])
         // In a real implementation, you would fetch tickets for this address
         // For now, we'll show a placeholder
@@ -44,8 +44,8 @@ export default function MyTicketsPage() {
 
   useEffect(() => {
     // Check if wallet is already connected
-    if (typeof window !== 'undefined' && window.ethereum) {
-      window.ethereum.request({ method: 'eth_accounts' })
+    if (typeof window !== 'undefined' && (window as any).ethereum) {
+      (window as any).ethereum.request({ method: 'eth_accounts' })
         .then((accounts: string[]) => {
           if (accounts.length > 0) {
             setWalletAddress(accounts[0])

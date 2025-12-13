@@ -11,6 +11,7 @@ pnpm-debug.log*
 .env.development.local
 .env.test.local
 .env.production.local
+.env.deploy
 
 # Build outputs
 dist/
@@ -72,3 +73,7 @@ artifacts/
 
 # Supabase
 .supabase/
+
+# AWS deployment files
+.serverless/
+.aws-sam/

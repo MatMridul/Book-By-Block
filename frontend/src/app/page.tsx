@@ -28,8 +28,11 @@ export default function HomePage() {
         setLoading(true)
         setError(null)
         const response = await api.getEvents()
-        if (response.success) {
-          setEvents(response.data || [])
+        // Backend returns array directly, not wrapped in success/data
+        if (Array.isArray(response)) {
+          setEvents(response)
+        } else if (response.success && response.data) {
+          setEvents(response.data)
         } else {
           setError('Failed to load events')
         }
@@ -68,7 +71,7 @@ export default function HomePage() {
               Admin Dashboard
             </Link>
             <a 
-              href={process.env.NEXT_PUBLIC_SCANNER_URL || 'https://scanner.bookbyblock.com'} 
+              href={process.env.NEXT_PUBLIC_SCANNER_URL || 'http://localhost:3002'} 
               target="_blank" 
               rel="noopener noreferrer"
               className="btn-secondary text-lg px-8 py-4 bg-accent-mint/20 border-accent-mint/30 text-accent-mint hover:bg-accent-mint/30 flex items-center justify-center space-x-2"
@@ -154,7 +157,7 @@ export default function HomePage() {
                       <span className="text-white font-semibold text-lg">{event.name}</span>
                     </div>
                     <h3 className="text-xl font-semibold mb-2">{event.name}</h3>
-                    <p className="text-dark-muted mb-4">Contract: {event.ticketContract.slice(0, 10)}...</p>
+                    <p className="text-dark-muted mb-4">Contract: {event.ticketContract?.slice(0, 10) || 'N/A'}...</p>
                     
                     <div className="space-y-2 mb-4">
                       <div className="flex items-center text-sm text-dark-muted">

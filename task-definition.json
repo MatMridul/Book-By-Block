@@ -1,0 +1,52 @@
+{
+  "family": "bookbyblock-backend",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::975050304684:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "bookbyblock-backend",
+      "image": "975050304684.dkr.ecr.us-east-1.amazonaws.com/bookbyblock-backend:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3001,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "PORT",
+          "value": "3001"
+        },
+        {
+          "name": "PRIVATE_KEY",
+          "value": "8100d62c26e851508d6773be8cf4db3da1857a078d07a9059a373d1df4aa55f7"
+        },
+        {
+          "name": "CONTRACT_ADDRESS",
+          "value": "0x96E3120D70eD1fB73E2751d9399B3D4F8794391f"
+        },
+        {
+          "name": "RPC_URL",
+          "value": "https://rpc-amoy.polygon.technology"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/bookbyblock-backend",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
+        }
+      }
+    }
+  ]
+}

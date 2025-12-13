@@ -83,7 +83,7 @@ export default function AdminPage() {
             </div>
           <div className="flex items-center space-x-4">
             <a 
-              href={process.env.NEXT_PUBLIC_SCANNER_URL || 'https://scanner.bookbyblock.com'} 
+              href={process.env.NEXT_PUBLIC_SCANNER_URL || 'http://localhost:3002'} 
               target="_blank" 
               rel="noopener noreferrer"
               className="btn-secondary flex items-center space-x-2"

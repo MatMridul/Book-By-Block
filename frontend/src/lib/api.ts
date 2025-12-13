@@ -1,23 +1,28 @@
 // API Configuration - reads from environment variable
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://43.205.239.215:3001';
 
 // Helper function for API calls with error handling
 async function apiCall(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE}${endpoint}`;
   
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('API Call failed:', error);
+    throw error;
   }
-
-  return response.json();
 }
 
 export const api = {
@@ -26,13 +31,13 @@ export const api = {
     return apiCall('/health');
   },
 
-  // Events
+  // Events - matching backend endpoints
   async getEvents() {
-    return apiCall('/api/events');
+    return apiCall('/events');
   },
 
   async getEvent(eventId: string) {
-    return apiCall(`/api/events/${eventId}`);
+    return apiCall(`/events/${eventId}`);
   },
 
   async createEvent(data: {
@@ -41,7 +46,7 @@ export const api = {
     basePrice: string;
     totalSupply: number;
   }) {
-    return apiCall('/api/admin/create-event', {
+    return apiCall('/events', {
       method: 'POST',
       body: JSON.stringify(data)
     });
@@ -49,22 +54,22 @@ export const api = {
 
   // Tickets
   async buyTicket(eventId: string, walletAddress: string) {
-    return apiCall('/api/buy', {
+    return apiCall(`/purchase/${eventId}`, {
       method: 'POST',
-      body: JSON.stringify({ eventId, buyerAddress: walletAddress })
+      body: JSON.stringify({ buyerAddress: walletAddress })
     });
   },
 
   async getTicketInfo(contract: string, tokenId: string) {
-    return apiCall(`/api/tickets/${contract}/${tokenId}`);
+    return apiCall(`/tickets/${contract}/${tokenId}`);
   },
 
   async getQR(contract: string, tokenId: string) {
-    return apiCall(`/api/qr/${contract}/${tokenId}`);
+    return apiCall(`/qr/${contract}/${tokenId}`);
   },
 
   async verifyTicket(payload: any) {
-    return apiCall('/api/verify-ticket', {
+    return apiCall('/verify-ticket', {
       method: 'POST',
       body: JSON.stringify(payload)
     });
@@ -72,6 +77,6 @@ export const api = {
 
   // Analytics
   async getAnalytics() {
-    return apiCall('/api/analytics');
+    return apiCall('/analytics');
   }
 };
