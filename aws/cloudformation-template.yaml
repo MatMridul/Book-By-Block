@@ -1,0 +1,251 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'BookByBlock - Web3 Ticketing Platform Infrastructure (Simplified for Root User)'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+  
+  ContainerImage:
+    Type: String
+    Description: ECR image URI for the backend container
+  
+  PrivateKey:
+    Type: String
+    NoEcho: true
+    Description: Blockchain private key
+  
+  ContractAddress:
+    Type: String
+    Description: Smart contract address
+  
+  RpcUrl:
+    Type: String
+    Default: https://polygon-rpc.com
+
+Resources:
+  # VPC and Networking (simplified)
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS tasks
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3001
+          ToPort: 3001
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+
+  # Secrets Manager
+  PrivateKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub bookbyblock-private-key
+      SecretString: !Ref PrivateKey
+
+  ContractAddressSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub bookbyblock-contract-address
+      SecretString: !Ref ContractAddress
+
+  RpcUrlSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub bookbyblock-rpc-url
+      SecretString: !Ref RpcUrl
+
+  SigningSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub bookbyblock-signing-secret
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludeCharacters: '"@/\'
+
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub bookbyblock-${Environment}
+
+  # CloudWatch Log Group
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/bookbyblock-${Environment}
+      RetentionInDays: 7
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub bookbyblock-${Environment}-alb
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub bookbyblock-${Environment}-tg
+      Port: 3001
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # ECS Task Definition (using default execution role)
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub bookbyblock-${Environment}
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 512
+      Memory: 1024
+      ExecutionRoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole
+      ContainerDefinitions:
+        - Name: bookbyblock-backend
+          Image: !Ref ContainerImage
+          PortMappings:
+            - ContainerPort: 3001
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: PORT
+              Value: '3001'
+          Secrets:
+            - Name: PRIVATE_KEY
+              ValueFrom: !Ref PrivateKeySecret
+            - Name: CONTRACT_ADDRESS
+              ValueFrom: !Ref ContractAddressSecret
+            - Name: RPC_URL
+              ValueFrom: !Ref RpcUrlSecret
+            - Name: SIGNING_SECRET
+              ValueFrom: !Ref SigningSecret
+
+  # ECS Service
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: Listener
+    Properties:
+      ServiceName: !Sub bookbyblock-${Environment}
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+          Subnets:
+            - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
+          AssignPublicIp: ENABLED
+      LoadBalancers:
+        - ContainerName: bookbyblock-backend
+          ContainerPort: 3001
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  ApiEndpoint:
+    Description: API endpoint URL
+    Value: !Sub http://${ApplicationLoadBalancer.DNSName}
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiEndpoint

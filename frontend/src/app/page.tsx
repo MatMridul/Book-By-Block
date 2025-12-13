@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Calendar, MapPin, Users, Zap, Shield, Coins } from 'lucide-react'
+import { Calendar, MapPin, Users, Zap, Shield, Coins, QrCode } from 'lucide-react'
 import { api } from '@/lib/api'
 
 interface Event {
-  eventId: string
+  eventId: number
   name: string
   ticketContract: string
   basePrice: string
@@ -14,26 +14,35 @@ interface Event {
   soldCount: number
   active: boolean
   creator: string
+  createdAt: string
 }
 
 export default function HomePage() {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadEvents() {
       try {
+        setLoading(true)
+        setError(null)
         const response = await api.getEvents()
         if (response.success) {
           setEvents(response.data || [])
+        } else {
+          setError('Failed to load events')
         }
       } catch (error) {
         console.error('Failed to load events:', error)
+        setError('Failed to connect to server')
         setEvents([])
       } finally {
         setLoading(false)
       }
     }
+
+    loadEvents()
   }, [])
 
   return (
@@ -55,9 +64,18 @@ export default function HomePage() {
             <button className="btn-primary text-lg px-8 py-4">
               Explore Events
             </button>
-            <button className="btn-secondary text-lg px-8 py-4 bg-white/10 border-white/20 text-white hover:bg-white/20">
-              Learn More
-            </button>
+            <Link href="/admin" className="btn-secondary text-lg px-8 py-4 bg-white/10 border-white/20 text-white hover:bg-white/20">
+              Admin Dashboard
+            </Link>
+            <a 
+              href={process.env.NEXT_PUBLIC_SCANNER_URL || 'https://scanner.bookbyblock.com'} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="btn-secondary text-lg px-8 py-4 bg-accent-mint/20 border-accent-mint/30 text-accent-mint hover:bg-accent-mint/30 flex items-center justify-center space-x-2"
+            >
+              <QrCode className="w-5 h-5" />
+              <span>Scanner App</span>
+            </a>
           </div>
         </div>
       </section>
@@ -90,14 +108,17 @@ export default function HomePage() {
       <section className="py-16">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between mb-8">
-            <h2 className="text-3xl font-bold">Upcoming Events</h2>
-            <div className="flex gap-2">
-              <button className="btn-secondary">All</button>
-              <button className="btn-secondary">Music</button>
-              <button className="btn-secondary">Tech</button>
-              <button className="btn-secondary">Sports</button>
-            </div>
+            <h2 className="text-3xl font-bold">Live Events</h2>
+            <Link href="/admin" className="btn-secondary">
+              Create Event
+            </Link>
           </div>
+
+          {error && (
+            <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 mb-6">
+              <p className="text-red-400">{error}</p>
+            </div>
+          )}
 
           {loading ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -113,25 +134,36 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
+          ) : events.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-24 h-24 bg-dark-border rounded-full mx-auto mb-4 flex items-center justify-center">
+                <Calendar className="w-12 h-12 text-dark-muted" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">No Events Yet</h3>
+              <p className="text-dark-muted mb-6">Be the first to create an event on BookByBlock!</p>
+              <Link href="/admin" className="btn-primary">
+                Create First Event
+              </Link>
+            </div>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {events.map((event) => (
-                <Link key={event.id} href={`/event/${event.id}`}>
+                <Link key={event.eventId} href={`/event/${event.eventId}`}>
                   <div className="card card-hover">
                     <div className="w-full h-48 bg-gradient-to-br from-primary-purple to-accent-mint rounded-lg mb-4 flex items-center justify-center">
-                      <span className="text-white font-semibold">{event.category}</span>
+                      <span className="text-white font-semibold text-lg">{event.name}</span>
                     </div>
                     <h3 className="text-xl font-semibold mb-2">{event.name}</h3>
-                    <p className="text-dark-muted mb-4">{event.description}</p>
+                    <p className="text-dark-muted mb-4">Contract: {event.ticketContract.slice(0, 10)}...</p>
                     
                     <div className="space-y-2 mb-4">
                       <div className="flex items-center text-sm text-dark-muted">
                         <Calendar className="w-4 h-4 mr-2" />
-                        {new Date(event.date).toLocaleDateString()}
+                        {new Date(event.createdAt).toLocaleDateString()}
                       </div>
                       <div className="flex items-center text-sm text-dark-muted">
                         <MapPin className="w-4 h-4 mr-2" />
-                        {event.venue}
+                        Blockchain Event
                       </div>
                       <div className="flex items-center text-sm text-dark-muted">
                         <Users className="w-4 h-4 mr-2" />
@@ -141,10 +173,12 @@ export default function HomePage() {
 
                     <div className="flex items-center justify-between">
                       <span className="text-2xl font-bold text-primary-purple">
-                        {event.price} ETH
+                        {event.basePrice} MATIC
                       </span>
-                      <span className="text-sm text-accent-success">
-                        {Math.round((parseInt(event.soldCount) / parseInt(event.totalSupply)) * 100)}% sold
+                      <span className={`text-sm px-2 py-1 rounded ${
+                        event.active ? 'bg-accent-success/20 text-accent-success' : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {event.active ? 'Active' : 'Inactive'}
                       </span>
                     </div>
                   </div>
@@ -152,31 +186,6 @@ export default function HomePage() {
               ))}
             </div>
           )}
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="py-16 bg-dark-card">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-12">Platform Statistics</h2>
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <div className="text-4xl font-bold text-primary-purple mb-2">1,247</div>
-              <div className="text-dark-muted">Events Created</div>
-            </div>
-            <div>
-              <div className="text-4xl font-bold text-accent-mint mb-2">89,432</div>
-              <div className="text-dark-muted">Tickets Sold</div>
-            </div>
-            <div>
-              <div className="text-4xl font-bold text-accent-success mb-2">$2.1M</div>
-              <div className="text-dark-muted">Volume Traded</div>
-            </div>
-            <div>
-              <div className="text-4xl font-bold text-accent-warning mb-2">99.8%</div>
-              <div className="text-dark-muted">Fraud Prevention</div>
-            </div>
-          </div>
         </div>
       </section>
     </div>

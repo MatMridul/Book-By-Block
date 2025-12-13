@@ -1,5 +1,5 @@
-// API Configuration for AWS deployment
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://jinh0b09t6.execute-api.us-east-1.amazonaws.com/prod';
+// API Configuration - reads from environment variable
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
 // Helper function for API calls with error handling
 async function apiCall(endpoint: string, options: RequestInit = {}) {
@@ -53,6 +53,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ eventId, buyerAddress: walletAddress })
     });
+  },
+
+  async getTicketInfo(contract: string, tokenId: string) {
+    return apiCall(`/api/tickets/${contract}/${tokenId}`);
   },
 
   async getQR(contract: string, tokenId: string) {

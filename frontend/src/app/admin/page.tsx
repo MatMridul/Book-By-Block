@@ -1,8 +1,16 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, BarChart3, Users, DollarSign, Shield, TrendingUp, QrCode } from 'lucide-react'
 import { api } from '@/lib/api'
+
+interface Analytics {
+  totalEvents: number
+  totalTicketsSold: number
+  totalRevenue: string
+  averageTicketPrice: string
+  recentEvents: any[]
+}
 
 export default function AdminPage() {
   const [showCreateEvent, setShowCreateEvent] = useState(false)
@@ -14,6 +22,25 @@ export default function AdminPage() {
   })
   const [creating, setCreating] = useState(false)
   const [result, setResult] = useState<any>(null)
+  const [analytics, setAnalytics] = useState<Analytics | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const response = await api.getAnalytics()
+        if (response.success) {
+          setAnalytics(response.data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch analytics:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAnalytics()
+  }, [])
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,169 +58,14 @@ export default function AdminPage() {
       if (response.success) {
         setEventForm({ name: '', symbol: '', basePrice: '', totalSupply: '' })
         setShowCreateEvent(false)
+        // Refresh analytics
+        const analyticsResponse = await api.getAnalytics()
+        if (analyticsResponse.success) {
+          setAnalytics(analyticsResponse.data)
+        }
       }
     } catch (error) {
       setResult({ success: false, error: 'Failed to create event' })
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  return (
-    <div className="min-h-screen bg-[#0D0D0D] text-[#E6E6E6] p-6">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
-        
-        {result && (
-          <div className={`p-4 rounded-lg mb-6 ${result.success ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
-            {result.success ? (
-              <div>
-                <p className="text-green-400">Event created successfully!</p>
-                <p className="text-sm mt-2">Event ID: {result.data?.eventId}</p>
-                <p className="text-sm">Contract: {result.data?.ticketContract}</p>
-                <p className="text-sm">TX: {result.data?.transactionHash}</p>
-              </div>
-            ) : (
-              <p className="text-red-400">{result.error}</p>
-            )}
-          </div>
-        )}
-
-        <div className="bg-[#1A1A1A] rounded-lg p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">Events</h2>
-            <button
-              onClick={() => setShowCreateEvent(!showCreateEvent)}
-              className="bg-[#7C3AED] hover:bg-[#6D28D9] px-4 py-2 rounded-lg flex items-center gap-2"
-            >
-              <Plus size={20} />
-              Create Event
-            </button>
-          </div>
-
-          {showCreateEvent && (
-            <form onSubmit={handleCreateEvent} className="bg-[#0D0D0D] p-6 rounded-lg mb-6">
-              <h3 className="text-lg font-semibold mb-4">Create New Event</h3>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Event Name</label>
-                  <input
-                    type="text"
-                    value={eventForm.name}
-                    onChange={(e) => setEventForm({...eventForm, name: e.target.value})}
-                    className="w-full bg-[#1A1A1A] border border-gray-600 rounded-lg px-3 py-2"
-                    placeholder="Hackathon Demo Concert"
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-2">Symbol</label>
-                  <input
-                    type="text"
-                    value={eventForm.symbol}
-                    onChange={(e) => setEventForm({...eventForm, symbol: e.target.value})}
-                    className="w-full bg-[#1A1A1A] border border-gray-600 rounded-lg px-3 py-2"
-                    placeholder="HDC"
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-2">Base Price (MATIC)</label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={eventForm.basePrice}
-                    onChange={(e) => setEventForm({...eventForm, basePrice: e.target.value})}
-                    className="w-full bg-[#1A1A1A] border border-gray-600 rounded-lg px-3 py-2"
-                    placeholder="0.01"
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-2">Total Supply</label>
-                  <input
-                    type="number"
-                    value={eventForm.totalSupply}
-                    onChange={(e) => setEventForm({...eventForm, totalSupply: e.target.value})}
-                    className="w-full bg-[#1A1A1A] border border-gray-600 rounded-lg px-3 py-2"
-                    placeholder="100"
-                    required
-                  />
-                </div>
-              </div>
-              
-              <div className="flex gap-4 mt-6">
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 px-6 py-2 rounded-lg"
-                >
-                  {creating ? 'Creating...' : 'Create Event'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateEvent(false)}
-                  className="bg-gray-600 hover:bg-gray-700 px-6 py-2 rounded-lg"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-  useEffect(() => {
-    const fetchAnalytics = async () => {
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/analytics`)
-        if (response.ok) {
-          const result = await response.json()
-          setAnalytics(result.data)
-        }
-      } catch (error) {
-        console.error('Failed to fetch analytics:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchAnalytics()
-  }, [])
-
-  const handleCreateEvent = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setCreating(true)
-
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/create-event`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: eventForm.name,
-          symbol: eventForm.symbol,
-          basePrice: eventForm.basePrice,
-          totalSupply: parseInt(eventForm.totalSupply)
-        })
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        alert(`Event created! Event ID: ${result.data.eventId}`)
-        setEventForm({ name: '', symbol: '', basePrice: '', totalSupply: '' })
-        setShowCreateEvent(false)
-      } else {
-        throw new Error('Failed to create event')
-      }
-    } catch (error) {
-      alert('Failed to create event. Please check your blockchain connection.')
     } finally {
       setCreating(false)
     }
@@ -209,6 +81,16 @@ export default function AdminPage() {
               <h1 className="text-4xl font-bold mb-2">Admin Dashboard</h1>
               <p className="text-dark-muted">Manage events and monitor platform performance</p>
             </div>
+          <div className="flex items-center space-x-4">
+            <a 
+              href={process.env.NEXT_PUBLIC_SCANNER_URL || 'https://scanner.bookbyblock.com'} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="btn-secondary flex items-center space-x-2"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>Scanner App</span>
+            </a>
             <button
               onClick={() => setShowCreateEvent(true)}
               className="btn-primary flex items-center space-x-2"
@@ -217,6 +99,23 @@ export default function AdminPage() {
               <span>Create Event</span>
             </button>
           </div>
+          </div>
+
+          {/* Result Message */}
+          {result && (
+            <div className={`p-4 rounded-lg mb-6 ${result.success ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
+              {result.success ? (
+                <div>
+                  <p className="text-green-400">Event created successfully!</p>
+                  <p className="text-sm mt-2">Event ID: {result.data?.eventId}</p>
+                  <p className="text-sm">Contract: {result.data?.ticketContract}</p>
+                  <p className="text-sm">TX: {result.data?.transactionHash}</p>
+                </div>
+              ) : (
+                <p className="text-red-400">{result.error}</p>
+              )}
+            </div>
+          )}
 
           {/* Analytics Cards */}
           {loading ? (
@@ -260,7 +159,7 @@ export default function AdminPage() {
                   </div>
                   <TrendingUp className="w-5 h-5 text-accent-success" />
                 </div>
-                <div className="text-2xl font-bold mb-1">{analytics.totalRevenue} ETH</div>
+                <div className="text-2xl font-bold mb-1">{analytics.totalRevenue} MATIC</div>
                 <div className="text-dark-muted">Total Revenue</div>
               </div>
 
@@ -271,53 +170,31 @@ export default function AdminPage() {
                   </div>
                   <TrendingUp className="w-5 h-5 text-accent-success" />
                 </div>
-                <div className="text-2xl font-bold mb-1">{analytics.ticketsScanned}</div>
-                <div className="text-dark-muted">Tickets Scanned</div>
+                <div className="text-2xl font-bold mb-1">{analytics.averageTicketPrice}</div>
+                <div className="text-dark-muted">Avg Ticket Price</div>
               </div>
             </div>
           ) : null}
 
-          {/* Top Events */}
-          {analytics && (
-            <div className="grid lg:grid-cols-2 gap-8 mb-8">
-              <div className="card">
-                <h3 className="text-xl font-semibold mb-6">Top Performing Events</h3>
-                <div className="space-y-4">
-                  {analytics.topEvents.map((event, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 bg-dark-bg rounded-lg">
-                      <div>
-                        <div className="font-medium">{event.name}</div>
-                        <div className="text-sm text-dark-muted">{event.sold} tickets sold</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold text-primary-purple">{event.revenue} ETH</div>
-                        <div className="text-sm text-dark-muted">Revenue</div>
+          {/* Recent Events */}
+          {analytics && analytics.recentEvents && (
+            <div className="card mb-8">
+              <h3 className="text-xl font-semibold mb-6">Recent Events</h3>
+              <div className="space-y-4">
+                {analytics.recentEvents.map((event, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 bg-dark-bg rounded-lg">
+                    <div>
+                      <div className="font-medium">{event.name}</div>
+                      <div className="text-sm text-dark-muted">{event.soldCount}/{event.totalSupply} tickets</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-semibold text-primary-purple">{event.basePrice} MATIC</div>
+                      <div className={`text-sm ${event.active ? 'text-accent-success' : 'text-red-400'}`}>
+                        {event.active ? 'Active' : 'Inactive'}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="card">
-                <h3 className="text-xl font-semibold mb-6">Platform Metrics</h3>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-4 bg-dark-bg rounded-lg">
-                    <span>Active Events</span>
-                    <span className="font-semibold text-accent-success">{analytics.activeEvents}</span>
                   </div>
-                  <div className="flex justify-between items-center p-4 bg-dark-bg rounded-lg">
-                    <span>Average Resale Price</span>
-                    <span className="font-semibold text-primary-purple">{analytics.averageResalePrice} ETH</span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-dark-bg rounded-lg">
-                    <span>Fraud Prevention Rate</span>
-                    <span className="font-semibold text-accent-success">99.8%</span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-dark-bg rounded-lg">
-                    <span>Platform Fee Collected</span>
-                    <span className="font-semibold text-accent-mint">0.53 ETH</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           )}
@@ -354,7 +231,7 @@ export default function AdminPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">Base Price (ETH)</label>
+                    <label className="block text-sm font-medium mb-2">Base Price (MATIC)</label>
                     <input
                       type="number"
                       step="0.001"

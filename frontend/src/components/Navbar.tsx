@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { Menu, X, Ticket, Wallet, User } from 'lucide-react'
+import { Menu, X, Ticket, Wallet, User, QrCode } from 'lucide-react'
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
@@ -32,6 +32,15 @@ export function Navbar() {
             <Link href="/admin" className="hover:text-primary-purple transition-colors">
               Admin
             </Link>
+            <a 
+              href={process.env.NEXT_PUBLIC_SCANNER_URL || 'https://scanner.bookbyblock.com'} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center space-x-2 hover:text-accent-mint transition-colors"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>Scanner</span>
+            </a>
           </div>
 
           {/* Wallet Connection */}
@@ -80,6 +89,16 @@ export function Navbar() {
               >
                 Admin
               </Link>
+              <a 
+                href={process.env.NEXT_PUBLIC_SCANNER_URL || 'https://scanner.bookbyblock.com'} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center space-x-2 hover:text-accent-mint transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <QrCode className="w-4 h-4" />
+                <span>Scanner App</span>
+              </a>
               <div className="flex flex-col space-y-2 pt-4 border-t border-dark-border">
                 <button className="btn-secondary flex items-center justify-center space-x-2">
                   <Wallet className="w-4 h-4" />

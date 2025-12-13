@@ -3,16 +3,20 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   
+  // Static export for S3 hosting
+  output: 'export',
+  trailingSlash: true,
+  
   // Environment variables
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
-    NEXT_PUBLIC_BLOCKCHAIN_RPC: process.env.NEXT_PUBLIC_BLOCKCHAIN_RPC || 'http://localhost:8545',
-    NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID || '31337'
+    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001',
+    NEXT_PUBLIC_SCANNER_URL: process.env.NEXT_PUBLIC_SCANNER_URL || 'https://scanner.bookbyblock.com',
+    NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID || '137'
   },
   
-  // Image optimization
+  // Image optimization for static export
   images: {
-    domains: ['api.bookbyblock.com', 'localhost']
+    unoptimized: true
   },
   
   // Webpack configuration for Web3
@@ -24,10 +28,7 @@ const nextConfig = {
       tls: false
     };
     return config;
-  },
-
-  // Output configuration for deployment
-  output: 'standalone'
+  }
 };
 
 module.exports = nextConfig;

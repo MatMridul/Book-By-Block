@@ -1,197 +1,333 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
-import { Calendar, MapPin, Users, Shield, Zap } from 'lucide-react'
+import { useParams, useRouter } from 'next/navigation'
+import { Calendar, MapPin, Users, Clock, Shield, Zap, ArrowLeft, Wallet } from 'lucide-react'
 import { api } from '@/lib/api'
 
 interface Event {
-  eventId: string
+  eventId: number
   name: string
   ticketContract: string
   basePrice: string
-  totalSupply: string
-  soldCount: string
+  totalSupply: number
+  soldCount: number
   active: boolean
   creator: string
+  createdAt: string
 }
 
-export default function EventPage() {
+export default function EventDetailsPage() {
   const params = useParams()
+  const router = useRouter()
   const eventId = params.id as string
   
   const [event, setEvent] = useState<Event | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [buying, setBuying] = useState(false)
   const [walletAddress, setWalletAddress] = useState('')
-  const [purchasing, setPurchasing] = useState(false)
-  const [result, setResult] = useState<any>(null)
+  const [showBuyModal, setShowBuyModal] = useState(false)
+  const [purchaseResult, setPurchaseResult] = useState<any>(null)
 
   useEffect(() => {
     async function loadEvent() {
       try {
-        const response = await api.getEvents()
+        setLoading(true)
+        setError(null)
+        const response = await api.getEvent(eventId)
         if (response.success) {
-          const foundEvent = response.data?.find((e: Event) => e.eventId === eventId)
-          setEvent(foundEvent || null)
+          setEvent(response.data)
+        } else {
+          setError('Event not found')
         }
       } catch (error) {
         console.error('Failed to load event:', error)
+        setError('Failed to load event details')
       } finally {
         setLoading(false)
       }
     }
-    
+
     if (eventId) {
       loadEvent()
     }
   }, [eventId])
 
-  const handlePurchase = async (e: React.FormEvent) => {
+  const handleBuyTicket = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!event || !walletAddress) return
-    
-    setPurchasing(true)
+    if (!walletAddress || !event) return
+
+    setBuying(true)
     try {
       const response = await api.buyTicket(eventId, walletAddress)
-      setResult(response)
+      setPurchaseResult(response)
+      if (response.success) {
+        setShowBuyModal(false)
+        setWalletAddress('')
+        // Refresh event data
+        const eventResponse = await api.getEvent(eventId)
+        if (eventResponse.success) {
+          setEvent(eventResponse.data)
+        }
+      }
     } catch (error) {
-      setResult({ success: false, error: 'Failed to purchase ticket' })
+      setPurchaseResult({ success: false, error: 'Failed to purchase ticket' })
     } finally {
-      setPurchasing(false)
+      setBuying(false)
+    }
+  }
+
+  const connectWallet = async () => {
+    if (typeof window !== 'undefined' && window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
+        setWalletAddress(accounts[0])
+      } catch (error) {
+        console.error('Failed to connect wallet:', error)
+      }
+    } else {
+      alert('Please install MetaMask to connect your wallet')
     }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0D0D0D] text-[#E6E6E6] flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7C3AED] mx-auto mb-4"></div>
-          <p>Loading event...</p>
+      <div className="min-h-screen py-8">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="h-8 bg-dark-border rounded shimmer mb-8 w-32"></div>
+            <div className="grid lg:grid-cols-2 gap-8">
+              <div className="h-96 bg-dark-border rounded-lg shimmer"></div>
+              <div className="space-y-4">
+                <div className="h-8 bg-dark-border rounded shimmer"></div>
+                <div className="h-4 bg-dark-border rounded shimmer w-3/4"></div>
+                <div className="h-20 bg-dark-border rounded shimmer"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
-  if (!event) {
+  if (error || !event) {
     return (
-      <div className="min-h-screen bg-[#0D0D0D] text-[#E6E6E6] flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Event Not Found</h1>
-          <p className="text-gray-400">The event you're looking for doesn't exist.</p>
+      <div className="min-h-screen py-8">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto text-center">
+            <button
+              onClick={() => router.back()}
+              className="btn-secondary mb-8 inline-flex items-center space-x-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+            <div className="card">
+              <h1 className="text-2xl font-bold mb-4">Event Not Found</h1>
+              <p className="text-dark-muted">{error}</p>
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
-  const availableTickets = parseInt(event.totalSupply) - parseInt(event.soldCount)
-  const soldOut = availableTickets <= 0
+  const availableTickets = event.totalSupply - event.soldCount
+  const soldPercentage = (event.soldCount / event.totalSupply) * 100
 
   return (
-    <div className="min-h-screen bg-[#0D0D0D] text-[#E6E6E6]">
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-[#1A1A1A] rounded-lg overflow-hidden">
-          <div className="h-64 bg-gradient-to-r from-[#7C3AED] to-[#24E3C0] flex items-center justify-center">
-            <h1 className="text-4xl font-bold text-white text-center">{event.name}</h1>
-          </div>
-          
-          <div className="p-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                <h2 className="text-2xl font-bold mb-6">Event Details</h2>
-                
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Users className="text-[#24E3C0]" size={20} />
-                    <span>{event.soldCount} / {event.totalSupply} tickets sold</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <Shield className="text-[#7C3AED]" size={20} />
-                    <span>Anti-scalping protection enabled</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <Zap className="text-[#24E3C0]" size={20} />
-                    <span>Dynamic QR verification</span>
-                  </div>
-                </div>
+    <div className="min-h-screen py-8">
+      <div className="container mx-auto px-4">
+        <div className="max-w-6xl mx-auto">
+          {/* Back Button */}
+          <button
+            onClick={() => router.back()}
+            className="btn-secondary mb-8 inline-flex items-center space-x-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Events</span>
+          </button>
 
-                <div className="mt-8 p-4 bg-[#0D0D0D] rounded-lg">
-                  <h3 className="font-semibold mb-2">Contract Details</h3>
-                  <p className="text-sm text-gray-400 break-all">{event.ticketContract}</p>
+          {/* Purchase Result */}
+          {purchaseResult && (
+            <div className={`p-4 rounded-lg mb-6 ${purchaseResult.success ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
+              {purchaseResult.success ? (
+                <div>
+                  <p className="text-green-400">Ticket purchased successfully!</p>
+                  <p className="text-sm mt-2">Token ID: {purchaseResult.data?.tokenId}</p>
+                  <p className="text-sm">Contract: {purchaseResult.data?.ticketContract}</p>
+                  <p className="text-sm">TX: {purchaseResult.data?.transactionHash}</p>
+                </div>
+              ) : (
+                <p className="text-red-400">{purchaseResult.error}</p>
+              )}
+            </div>
+          )}
+
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* Event Image */}
+            <div className="relative">
+              <div className="w-full h-96 bg-gradient-to-br from-primary-purple to-accent-mint rounded-lg flex items-center justify-center">
+                <div className="text-center text-white">
+                  <h2 className="text-3xl font-bold mb-2">{event.name}</h2>
+                  <p className="text-lg opacity-90">NFT Event Ticket</p>
                 </div>
               </div>
               
+              {/* Status Badge */}
+              <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-sm font-medium ${
+                event.active ? 'bg-accent-success text-white' : 'bg-red-500 text-white'
+              }`}>
+                {event.active ? 'Active' : 'Inactive'}
+              </div>
+            </div>
+
+            {/* Event Details */}
+            <div className="space-y-6">
               <div>
-                <div className="bg-[#0D0D0D] rounded-lg p-6">
-                  <h3 className="text-xl font-bold mb-4">Purchase Ticket</h3>
-                  
-                  {result && (
-                    <div className={`p-4 rounded-lg mb-4 ${result.success ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
-                      {result.success ? (
-                        <div>
-                          <p className="text-green-400">Ticket purchased successfully!</p>
-                          <p className="text-sm mt-2">Token ID: {result.data?.tokenId}</p>
-                          <p className="text-sm">TX: {result.data?.transactionHash}</p>
-                        </div>
-                      ) : (
-                        <p className="text-red-400">{result.error}</p>
-                      )}
-                    </div>
-                  )}
-                  
-                  <div className="mb-4">
-                    <div className="text-3xl font-bold text-[#7C3AED] mb-2">
-                      {event.basePrice} MATIC
-                    </div>
-                    <p className="text-gray-400">Base price per ticket</p>
+                <h1 className="text-4xl font-bold mb-4">{event.name}</h1>
+                <p className="text-dark-muted text-lg">
+                  Blockchain-powered NFT ticket with anti-scalping protection and dynamic QR verification.
+                </p>
+              </div>
+
+              {/* Event Info */}
+              <div className="space-y-4">
+                <div className="flex items-center text-dark-muted">
+                  <Calendar className="w-5 h-5 mr-3" />
+                  <span>Created: {new Date(event.createdAt).toLocaleDateString()}</span>
+                </div>
+                <div className="flex items-center text-dark-muted">
+                  <MapPin className="w-5 h-5 mr-3" />
+                  <span>Contract: {event.ticketContract}</span>
+                </div>
+                <div className="flex items-center text-dark-muted">
+                  <Users className="w-5 h-5 mr-3" />
+                  <span>{event.soldCount} of {event.totalSupply} tickets sold</span>
+                </div>
+                <div className="flex items-center text-dark-muted">
+                  <Wallet className="w-5 h-5 mr-3" />
+                  <span>Creator: {event.creator.slice(0, 10)}...{event.creator.slice(-8)}</span>
+                </div>
+              </div>
+
+              {/* Availability Bar */}
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span>Availability</span>
+                  <span>{availableTickets} remaining</span>
+                </div>
+                <div className="w-full bg-dark-border rounded-full h-2">
+                  <div 
+                    className="bg-gradient-to-r from-accent-success to-accent-mint h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.max(100 - soldPercentage, 5)}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Price and Buy Button */}
+              <div className="bg-dark-card border border-dark-border rounded-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <div className="text-3xl font-bold text-primary-purple">{event.basePrice} MATIC</div>
+                    <div className="text-dark-muted">Per ticket</div>
                   </div>
-                  
-                  {!soldOut ? (
-                    <form onSubmit={handlePurchase} className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-2">
-                          Wallet Address
-                        </label>
-                        <input
-                          type="text"
-                          value={walletAddress}
-                          onChange={(e) => setWalletAddress(e.target.value)}
-                          placeholder="0x7270c5186c95cfd847d3321d2e873d6a52e57d6e"
-                          className="w-full bg-[#1A1A1A] border border-gray-600 rounded-lg px-3 py-2 text-sm"
-                          required
-                        />
-                        <p className="text-xs text-gray-400 mt-1">
-                          Enter the wallet address to receive the NFT ticket
-                        </p>
-                      </div>
-                      
-                      <button
-                        type="submit"
-                        disabled={purchasing || !walletAddress}
-                        className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 py-3 rounded-lg font-semibold"
-                      >
-                        {purchasing ? 'Processing...' : 'Buy Ticket'}
-                      </button>
-                    </form>
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-red-400 font-semibold">SOLD OUT</p>
-                      <p className="text-gray-400 text-sm mt-2">
-                        All tickets have been sold
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="mt-4 text-xs text-gray-400">
-                    <p>• Max 2 resales per ticket</p>
-                    <p>• 110% max resale price</p>
-                    <p>• Blockchain verified ownership</p>
+                  <div className="text-right">
+                    <div className="text-lg font-semibold">{soldPercentage.toFixed(1)}%</div>
+                    <div className="text-dark-muted">Sold</div>
                   </div>
+                </div>
+
+                {event.active && availableTickets > 0 ? (
+                  <button
+                    onClick={() => setShowBuyModal(true)}
+                    className="btn-primary w-full text-lg py-3"
+                  >
+                    Buy Ticket
+                  </button>
+                ) : (
+                  <button disabled className="btn-secondary w-full text-lg py-3 opacity-50 cursor-not-allowed">
+                    {!event.active ? 'Event Inactive' : 'Sold Out'}
+                  </button>
+                )}
+              </div>
+
+              {/* Features */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-4 bg-dark-card rounded-lg">
+                  <Shield className="w-8 h-8 text-primary-purple mx-auto mb-2" />
+                  <div className="font-medium">Anti-Scalping</div>
+                  <div className="text-sm text-dark-muted">Protected resale</div>
+                </div>
+                <div className="text-center p-4 bg-dark-card rounded-lg">
+                  <Zap className="w-8 h-8 text-accent-mint mx-auto mb-2" />
+                  <div className="font-medium">Dynamic QR</div>
+                  <div className="text-sm text-dark-muted">Secure verification</div>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* Buy Ticket Modal */}
+          {showBuyModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-dark-card border border-dark-border rounded-xl p-6 w-full max-w-md">
+                <h2 className="text-2xl font-bold mb-6">Buy Ticket</h2>
+                
+                <form onSubmit={handleBuyTicket} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Wallet Address</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        required
+                        value={walletAddress}
+                        onChange={(e) => setWalletAddress(e.target.value)}
+                        className="input flex-1"
+                        placeholder="0x..."
+                      />
+                      <button
+                        type="button"
+                        onClick={connectWallet}
+                        className="btn-secondary px-4"
+                      >
+                        Connect
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-dark-bg p-4 rounded-lg">
+                    <div className="flex justify-between mb-2">
+                      <span>Price:</span>
+                      <span className="font-semibold">{event.basePrice} MATIC</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-dark-muted">
+                      <span>Gas fees:</span>
+                      <span>~0.001 MATIC</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowBuyModal(false)}
+                      className="btn-secondary flex-1"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={buying || !walletAddress}
+                      className="btn-primary flex-1"
+                    >
+                      {buying ? 'Purchasing...' : 'Buy Ticket'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

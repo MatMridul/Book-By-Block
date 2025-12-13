@@ -1,0 +1,381 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'BookByBlock - Complete AWS Hosting (Backend + Frontend + Scanner)'
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: bookbyblock.com
+    Description: Your domain name
+  
+  ContainerImage:
+    Type: String
+    Description: ECR image URI for backend
+  
+  PrivateKey:
+    Type: String
+    NoEcho: true
+    Description: Blockchain private key
+  
+  ContractAddress:
+    Type: String
+    Description: Smart contract address
+
+Resources:
+  # S3 Buckets for Static Hosting
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${DomainName}-frontend
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  ScannerBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub scanner-${DomainName}
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  # S3 Bucket Policies
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub ${FrontendBucket}/*
+
+  ScannerBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ScannerBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub ${ScannerBucket}/*
+
+  # CloudFront Distributions
+  FrontendDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref DomainName
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+        DefaultRootObject: index.html
+        Enabled: true
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        PriceClass: PriceClass_100
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+
+  ScannerDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Sub scanner.${DomainName}
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+        DefaultRootObject: index.html
+        Enabled: true
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt ScannerBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        PriceClass: PriceClass_100
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+
+  # VPC and Networking for Backend
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS tasks
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3001
+          ToPort: 3001
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+
+  # Secrets Manager
+  PrivateKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: bookbyblock-private-key
+      SecretString: !Ref PrivateKey
+
+  ContractAddressSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: bookbyblock-contract-address
+      SecretString: !Ref ContractAddress
+
+  RpcUrlSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: bookbyblock-rpc-url
+      SecretString: https://polygon-rpc.com
+
+  SigningSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: bookbyblock-signing-secret
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludeCharacters: '"@/\'
+
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: bookbyblock-cluster
+
+  # CloudWatch Log Group
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/bookbyblock-backend
+      RetentionInDays: 7
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: bookbyblock-alb
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: bookbyblock-tg
+      Port: 3001
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # ECS Task Definition
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: bookbyblock-backend
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 512
+      Memory: 1024
+      ExecutionRoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole
+      ContainerDefinitions:
+        - Name: bookbyblock-backend
+          Image: !Ref ContainerImage
+          PortMappings:
+            - ContainerPort: 3001
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: PORT
+              Value: '3001'
+          Secrets:
+            - Name: PRIVATE_KEY
+              ValueFrom: !Ref PrivateKeySecret
+            - Name: CONTRACT_ADDRESS
+              ValueFrom: !Ref ContractAddressSecret
+            - Name: RPC_URL
+              ValueFrom: !Ref RpcUrlSecret
+            - Name: SIGNING_SECRET
+              ValueFrom: !Ref SigningSecret
+
+  # ECS Service
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: Listener
+    Properties:
+      ServiceName: bookbyblock-backend
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+          Subnets:
+            - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
+          AssignPublicIp: ENABLED
+      LoadBalancers:
+        - ContainerName: bookbyblock-backend
+          ContainerPort: 3001
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  FrontendURL:
+    Description: Frontend CloudFront URL
+    Value: !Sub https://${DomainName}
+    Export:
+      Name: !Sub ${AWS::StackName}-FrontendURL
+
+  ScannerURL:
+    Description: Scanner CloudFront URL
+    Value: !Sub https://scanner.${DomainName}
+    Export:
+      Name: !Sub ${AWS::StackName}-ScannerURL
+
+  BackendURL:
+    Description: Backend API URL
+    Value: !Sub http://${ApplicationLoadBalancer.DNSName}
+    Export:
+      Name: !Sub ${AWS::StackName}-BackendURL
+
+  FrontendBucket:
+    Description: S3 bucket for frontend
+    Value: !Ref FrontendBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-FrontendBucket
+
+  ScannerBucket:
+    Description: S3 bucket for scanner
+    Value: !Ref ScannerBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-ScannerBucket

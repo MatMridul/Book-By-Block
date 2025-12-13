@@ -1,103 +1,91 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
-import { QrCode, RefreshCw, Shield, Clock, ExternalLink, ArrowLeft } from 'lucide-react'
-import Link from 'next/link'
+import { useState, useEffect, useCallback } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { ArrowLeft, RefreshCw, Clock, Shield, QrCode, AlertTriangle } from 'lucide-react'
+import { api } from '@/lib/api'
 
 interface TicketInfo {
   owner: string
-  resales: string
+  resales: number
   lastPrice: string
   exists: boolean
-  burned: boolean
 }
 
-export default function TicketPage() {
+interface QRData {
+  qrCode: string
+  validUntil: string
+  ticketInfo: TicketInfo
+}
+
+export default function TicketQRPage() {
   const params = useParams()
-  const { contract, tokenId } = params
+  const router = useRouter()
+  const contract = params.contract as string
+  const tokenId = params.tokenId as string
   
-  const [qrCode, setQrCode] = useState('')
-  const [ticketInfo, setTicketInfo] = useState<TicketInfo | null>(null)
+  const [qrData, setQrData] = useState<QRData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState(10)
   const [refreshing, setRefreshing] = useState(false)
-  const [timeLeft, setTimeLeft] = useState(10)
 
-  // Fetch ticket info
-  useEffect(() => {
-    const fetchTicketInfo = async () => {
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tickets/${contract}/${tokenId}`)
-        if (response.ok) {
-          const result = await response.json()
-          setTicketInfo(result.data)
-        }
-      } catch (error) {
-        console.error('Failed to fetch ticket info:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchTicketInfo()
-  }, [contract, tokenId])
-
-  // Fetch QR code
-  const fetchQR = async () => {
-    if (!ticketInfo?.exists) return
-
-    setRefreshing(true)
+  const generateQR = useCallback(async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/qr/${contract}/${tokenId}`)
-      if (response.ok) {
-        const result = await response.json()
-        setQrCode(result.data.qrCode)
-        setTimeLeft(10)
+      setRefreshing(true)
+      setError(null)
+      const response = await api.getQR(contract, tokenId)
+      if (response.success) {
+        setQrData(response.data)
+        setCountdown(10) // Reset countdown
+      } else {
+        setError(response.error || 'Failed to generate QR code')
       }
     } catch (error) {
-      console.error('Failed to fetch QR:', error)
+      console.error('Failed to generate QR:', error)
+      setError('Failed to generate QR code')
     } finally {
       setRefreshing(false)
+      setLoading(false)
     }
-  }
+  }, [contract, tokenId])
 
-  // Auto-refresh QR code every 10 seconds
+  // Initial load
   useEffect(() => {
-    if (!ticketInfo?.exists) return
+    generateQR()
+  }, [generateQR])
 
-    fetchQR()
-    
+  // Auto-refresh countdown and QR generation
+  useEffect(() => {
+    if (!qrData || error) return
+
     const interval = setInterval(() => {
-      fetchQR()
-    }, 10000)
-
-    return () => clearInterval(interval)
-  }, [ticketInfo])
-
-  // Countdown timer
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
+      setCountdown((prev) => {
         if (prev <= 1) {
+          generateQR()
           return 10
         }
         return prev - 1
       })
     }, 1000)
 
-    return () => clearInterval(timer)
-  }, [])
+    return () => clearInterval(interval)
+  }, [qrData, error, generateQR])
 
-  if (loading) {
+  const manualRefresh = () => {
+    generateQR()
+  }
+
+  if (loading && !qrData) {
     return (
       <div className="min-h-screen py-8">
         <div className="container mx-auto px-4">
-          <div className="max-w-2xl mx-auto">
-            <div className="h-8 bg-dark-border rounded shimmer mb-8 w-1/4"></div>
+          <div className="max-w-2xl mx-auto text-center">
+            <div className="h-8 bg-dark-border rounded shimmer mb-8 w-32 mx-auto"></div>
             <div className="card">
-              <div className="w-64 h-64 bg-dark-border rounded-xl shimmer mx-auto mb-6"></div>
+              <div className="w-80 h-80 bg-dark-border rounded-lg shimmer mx-auto mb-6"></div>
               <div className="h-6 bg-dark-border rounded shimmer mb-4"></div>
-              <div className="h-4 bg-dark-border rounded shimmer w-3/4"></div>
+              <div className="h-4 bg-dark-border rounded shimmer w-3/4 mx-auto"></div>
             </div>
           </div>
         </div>
@@ -105,20 +93,28 @@ export default function TicketPage() {
     )
   }
 
-  if (!ticketInfo?.exists) {
+  if (error && !qrData) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-accent-error/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <QrCode className="w-8 h-8 text-accent-error" />
+      <div className="min-h-screen py-8">
+        <div className="container mx-auto px-4">
+          <div className="max-w-2xl mx-auto">
+            <button
+              onClick={() => router.back()}
+              className="btn-secondary mb-8 inline-flex items-center space-x-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+            
+            <div className="card text-center">
+              <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+              <h1 className="text-2xl font-bold mb-4">Unable to Load Ticket</h1>
+              <p className="text-dark-muted mb-6">{error}</p>
+              <button onClick={generateQR} className="btn-primary">
+                Try Again
+              </button>
+            </div>
           </div>
-          <h1 className="text-2xl font-bold mb-4">Ticket Not Found</h1>
-          <p className="text-dark-muted mb-6">
-            This ticket may have been used or doesn't exist.
-          </p>
-          <Link href="/" className="btn-primary">
-            Back to Events
-          </Link>
         </div>
       </div>
     )
@@ -128,115 +124,149 @@ export default function TicketPage() {
     <div className="min-h-screen py-8">
       <div className="container mx-auto px-4">
         <div className="max-w-2xl mx-auto">
-          {/* Back Button */}
-          <Link href="/my-tickets" className="flex items-center text-dark-muted hover:text-primary-purple mb-8 transition-colors">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to My Tickets
-          </Link>
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <button
+              onClick={() => router.back()}
+              className="btn-secondary inline-flex items-center space-x-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+            
+            <button
+              onClick={manualRefresh}
+              disabled={refreshing}
+              className="btn-secondary inline-flex items-center space-x-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+          </div>
 
-          {/* Ticket Card */}
-          <div className="card text-center">
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold mb-2">Your Ticket</h1>
+          {/* Ticket Info */}
+          <div className="card mb-6">
+            <div className="text-center mb-6">
+              <h1 className="text-3xl font-bold mb-2">Your Ticket</h1>
               <p className="text-dark-muted">
-                Contract: {contract as string}
-              </p>
-              <p className="text-dark-muted">
-                Token ID: #{tokenId}
+                Token #{tokenId} • {contract.slice(0, 10)}...{contract.slice(-8)}
               </p>
             </div>
 
-            {/* QR Code Section */}
-            <div className="qr-container mb-6">
-              <div className="relative">
-                {/* Refresh indicator */}
-                <div className="qr-refresh-indicator"></div>
-                
+            {qrData?.ticketInfo && (
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="text-center p-4 bg-dark-bg rounded-lg">
+                  <div className="text-lg font-semibold">{qrData.ticketInfo.resales}/2</div>
+                  <div className="text-sm text-dark-muted">Resales Used</div>
+                </div>
+                <div className="text-center p-4 bg-dark-bg rounded-lg">
+                  <div className={`text-lg font-semibold ${qrData.ticketInfo.exists ? 'text-accent-success' : 'text-red-400'}`}>
+                    {qrData.ticketInfo.exists ? 'Valid' : 'Used'}
+                  </div>
+                  <div className="text-sm text-dark-muted">Status</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* QR Code Section */}
+          <div className="card text-center">
+            {qrData?.ticketInfo?.exists ? (
+              <>
+                {/* Countdown Timer */}
+                <div className="flex items-center justify-center space-x-2 mb-6">
+                  <Clock className="w-5 h-5 text-accent-mint" />
+                  <span className="text-lg font-semibold">
+                    Refreshes in {countdown}s
+                  </span>
+                </div>
+
                 {/* QR Code */}
-                <div className="bg-white p-4 rounded-xl inline-block mb-4 animate-qr-refresh">
-                  {qrCode ? (
-                    <img 
-                      src={qrCode} 
-                      alt="Dynamic QR Code" 
-                      className="w-64 h-64 mx-auto"
-                    />
-                  ) : (
-                    <div className="w-64 h-64 bg-gray-200 rounded-lg flex items-center justify-center">
-                      <QrCode className="w-16 h-16 text-gray-400" />
+                <div className="relative inline-block mb-6">
+                  <div className={`transition-opacity duration-300 ${refreshing ? 'opacity-50' : 'opacity-100'}`}>
+                    {qrData?.qrCode ? (
+                      <img
+                        src={qrData.qrCode}
+                        alt="Dynamic QR Code"
+                        className="w-80 h-80 mx-auto border-4 border-primary-purple rounded-lg"
+                      />
+                    ) : (
+                      <div className="w-80 h-80 bg-dark-border rounded-lg flex items-center justify-center">
+                        <QrCode className="w-16 h-16 text-dark-muted" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {refreshing && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <RefreshCw className="w-8 h-8 text-primary-purple animate-spin" />
                     </div>
                   )}
                 </div>
 
-                {/* Refresh Status */}
-                <div className="flex items-center justify-center space-x-2 text-sm text-dark-muted">
-                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                  <span>Refreshes in {timeLeft}s</span>
+                {/* Security Info */}
+                <div className="bg-primary-purple/10 border border-primary-purple/20 rounded-lg p-4">
+                  <div className="flex items-center justify-center space-x-2 mb-2">
+                    <Shield className="w-5 h-5 text-primary-purple" />
+                    <span className="font-semibold text-primary-purple">Anti-Screenshot Protection</span>
+                  </div>
+                  <p className="text-sm text-dark-muted">
+                    This QR code refreshes every 10 seconds and contains cryptographic signatures 
+                    to prevent fraud and unauthorized screenshots.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="py-12">
+                <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+                <h2 className="text-2xl font-bold mb-2">Ticket Already Used</h2>
+                <p className="text-dark-muted">
+                  This ticket has been scanned and verified. It cannot be used again.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Instructions */}
+          <div className="card mt-6">
+            <h3 className="text-lg font-semibold mb-4">How to Use Your Ticket</h3>
+            <div className="space-y-3 text-sm text-dark-muted">
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-primary-purple text-white rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
+                  1
+                </div>
+                <div>
+                  <div className="font-medium text-white">Present at Entry</div>
+                  <div>Show this QR code to the scanner at the event entrance</div>
                 </div>
               </div>
-            </div>
-
-            {/* Security Notice */}
-            <div className="bg-accent-warning/10 border border-accent-warning/30 rounded-lg p-4 mb-6">
-              <div className="flex items-center justify-center mb-2">
-                <Shield className="w-5 h-5 text-accent-warning mr-2" />
-                <span className="font-semibold text-accent-warning">Anti-Screenshot Protection</span>
-              </div>
-              <p className="text-sm text-dark-muted">
-                This QR code changes every 10 seconds and cannot be screenshot or shared. 
-                Only show this to venue staff at entry.
-              </p>
-            </div>
-
-            {/* Ticket Details */}
-            <div className="grid md:grid-cols-2 gap-4 text-left">
-              <div className="bg-dark-bg rounded-lg p-4">
-                <div className="text-sm text-dark-muted mb-1">Owner</div>
-                <div className="font-mono text-sm break-all">{ticketInfo.owner}</div>
-              </div>
-              <div className="bg-dark-bg rounded-lg p-4">
-                <div className="text-sm text-dark-muted mb-1">Resales</div>
-                <div className="font-semibold">{ticketInfo.resales}/2</div>
-              </div>
-              <div className="bg-dark-bg rounded-lg p-4">
-                <div className="text-sm text-dark-muted mb-1">Last Price</div>
-                <div className="font-semibold">{ticketInfo.lastPrice} ETH</div>
-              </div>
-              <div className="bg-dark-bg rounded-lg p-4">
-                <div className="text-sm text-dark-muted mb-1">Status</div>
-                <div className="flex items-center">
-                  <div className="w-2 h-2 bg-accent-success rounded-full mr-2"></div>
-                  <span className="text-accent-success font-semibold">Valid</span>
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-primary-purple text-white rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
+                  2
+                </div>
+                <div>
+                  <div className="font-medium text-white">Wait for Verification</div>
+                  <div>The scanner will verify your ticket on the blockchain</div>
                 </div>
               </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 mt-6">
-              <button className="btn-secondary flex items-center justify-center space-x-2">
-                <ExternalLink className="w-4 h-4" />
-                <span>View on Blockchain</span>
-              </button>
-              <button className="btn-secondary flex items-center justify-center space-x-2">
-                <RefreshCw className="w-4 h-4" />
-                <span>Refresh QR</span>
-              </button>
-            </div>
-
-            {/* Instructions */}
-            <div className="mt-8 pt-6 border-t border-dark-border text-left">
-              <h3 className="font-semibold mb-3 flex items-center">
-                <Clock className="w-4 h-4 text-primary-purple mr-2" />
-                Entry Instructions
-              </h3>
-              <div className="space-y-2 text-sm text-dark-muted">
-                <div>1. Arrive at the venue entrance</div>
-                <div>2. Show this QR code to staff (do not screenshot)</div>
-                <div>3. Staff will scan and verify your ticket</div>
-                <div>4. Your ticket will be automatically burned after entry</div>
-                <div>5. Keep your phone charged for the QR code</div>
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-primary-purple text-white rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
+                  3
+                </div>
+                <div>
+                  <div className="font-medium text-white">Entry Granted</div>
+                  <div>Once verified, your ticket will be marked as used</div>
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 mt-6">
+              <p className="text-red-400">{error}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
